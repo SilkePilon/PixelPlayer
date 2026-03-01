@@ -170,27 +170,27 @@ fun MoreScreen(
             }
 
             item {
-                MoreActionChip(
-                    label = when {
-                        isCurrentSongDownloaded -> "Saved on watch"
-                        isCurrentSongTransferring -> "Saving..."
-                        else -> "Add to library"
-                    },
-                    subtitle = when {
-                        currentSongId.isBlank() -> "No active song"
-                        isCurrentSongDownloaded -> "Available on watch"
-                        isCurrentSongTransferring -> "Transfer in progress"
-                        isWatchOutputSelected -> "Switch to phone output to transfer"
-                        else -> "Save this song to watch"
-                    },
-                    icon = Icons.Rounded.LibraryAdd,
-                    onClick = {
-                        if (canSaveCurrentSong) {
-                            downloadsViewModel.requestDownload(currentSongId)
-                        }
-                    },
-                    enabled = canSaveCurrentSong,
-                )
+                if (currentSongId.isNotBlank() && (!isCurrentSongDownloaded || isCurrentSongTransferring)) {
+                    MoreActionChip(
+                        label = if (isCurrentSongTransferring) {
+                            "Transferring to watch"
+                        } else {
+                            "Transfer to watch"
+                        },
+                        subtitle = when {
+                            isCurrentSongTransferring -> "Transfer in progress"
+                            isWatchOutputSelected -> "Switch to phone output to transfer"
+                            else -> "Save this song on watch"
+                        },
+                        icon = Icons.Rounded.LibraryAdd,
+                        onClick = {
+                            if (canSaveCurrentSong) {
+                                downloadsViewModel.requestDownload(currentSongId)
+                            }
+                        },
+                        enabled = canSaveCurrentSong,
+                    )
+                }
             }
 
             item {

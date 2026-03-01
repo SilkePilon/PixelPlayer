@@ -15,6 +15,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -33,6 +34,7 @@ import com.theveloper.pixelplay.presentation.components.WearTopTimeText
 import com.theveloper.pixelplay.presentation.viewmodel.BrowseUiState
 import com.theveloper.pixelplay.presentation.viewmodel.WearBrowseViewModel
 import com.theveloper.pixelplay.presentation.theme.LocalWearPalette
+import com.theveloper.pixelplay.presentation.theme.rememberBrowseSubscreenTitleFont
 import com.theveloper.pixelplay.presentation.theme.screenBackgroundColor
 import com.theveloper.pixelplay.presentation.theme.surfaceContainerColor
 import com.theveloper.pixelplay.shared.WearBrowseRequest
@@ -57,6 +59,7 @@ fun LibraryListScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val palette = LocalWearPalette.current
+    val subscreenTitleFont = rememberBrowseSubscreenTitleFont()
 
     LaunchedEffect(browseType) {
         viewModel.loadItems(browseType)
@@ -101,7 +104,9 @@ fun LibraryListScreen(
                     item {
                         Text(
                             text = title,
-                            style = MaterialTheme.typography.title3,
+                            style = MaterialTheme.typography.title2,
+                            fontFamily = subscreenTitleFont,
+                            fontWeight = FontWeight(760),
                             color = palette.textPrimary,
                             textAlign = TextAlign.Center,
                             modifier = Modifier.fillMaxWidth(),
@@ -172,7 +177,9 @@ fun LibraryListScreen(
                     item {
                         Text(
                             text = title,
-                            style = MaterialTheme.typography.title3,
+                            style = MaterialTheme.typography.title2,
+                            fontFamily = subscreenTitleFont,
+                            fontWeight = FontWeight(760),
                             color = palette.textPrimary,
                             textAlign = TextAlign.Center,
                             modifier = Modifier

@@ -23,6 +23,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -42,6 +43,7 @@ import com.theveloper.pixelplay.presentation.components.WearTopTimeText
 import com.theveloper.pixelplay.presentation.viewmodel.BrowseUiState
 import com.theveloper.pixelplay.presentation.viewmodel.WearBrowseViewModel
 import com.theveloper.pixelplay.presentation.theme.LocalWearPalette
+import com.theveloper.pixelplay.presentation.theme.rememberBrowseSubscreenTitleFont
 import com.theveloper.pixelplay.presentation.theme.screenBackgroundColor
 import com.theveloper.pixelplay.presentation.theme.surfaceContainerColor
 import com.theveloper.pixelplay.presentation.theme.surfaceContainerHighColor
@@ -82,6 +84,7 @@ fun SongListScreen(
     val activeTransfers by downloadsViewModel.activeTransfers.collectAsState()
     val playerState by playerViewModel.playerState.collectAsState()
     val palette = LocalWearPalette.current
+    val subscreenTitleFont = rememberBrowseSubscreenTitleFont()
     var selectedSongForMenu by remember { mutableStateOf<WearLibraryItem?>(null) }
     var selectedSongForTransferConfirmation by remember { mutableStateOf<WearLibraryItem?>(null) }
 
@@ -144,7 +147,9 @@ fun SongListScreen(
                     item {
                         Text(
                             text = title,
-                            style = MaterialTheme.typography.title3,
+                            style = MaterialTheme.typography.title2,
+                            fontFamily = subscreenTitleFont,
+                            fontWeight = FontWeight(760),
                             color = palette.textPrimary,
                             textAlign = TextAlign.Center,
                             modifier = Modifier.fillMaxWidth(),
@@ -215,7 +220,9 @@ fun SongListScreen(
                     item {
                         Text(
                             text = title,
-                            style = MaterialTheme.typography.title3,
+                            style = MaterialTheme.typography.title2,
+                            fontFamily = subscreenTitleFont,
+                            fontWeight = FontWeight(760),
                             color = palette.textPrimary,
                             textAlign = TextAlign.Center,
                             modifier = Modifier
