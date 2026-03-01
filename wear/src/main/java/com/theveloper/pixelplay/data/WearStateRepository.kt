@@ -1,9 +1,13 @@
 package com.theveloper.pixelplay.data
 
 import android.graphics.Bitmap
+import com.theveloper.pixelplay.shared.WearPlaybackResult
 import com.theveloper.pixelplay.shared.WearPlayerState
 import com.theveloper.pixelplay.shared.WearVolumeState
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import javax.inject.Inject
@@ -39,6 +43,9 @@ class WearStateRepository @Inject constructor() {
     private val _volumeState = MutableStateFlow(WearVolumeState())
     val volumeState: StateFlow<WearVolumeState> = _volumeState.asStateFlow()
 
+    private val _playbackResults = MutableSharedFlow<WearPlaybackResult>(extraBufferCapacity = 8)
+    val playbackResults: SharedFlow<WearPlaybackResult> = _playbackResults.asSharedFlow()
+
     fun updatePlayerState(state: WearPlayerState) {
         _playerState.value = state
         if (state.volumeMax > 0) {
@@ -67,6 +74,10 @@ class WearStateRepository @Inject constructor() {
 
     fun setOutputTarget(target: WearOutputTarget) {
         _outputTarget.value = target
+    }
+
+    fun publishPlaybackResult(result: WearPlaybackResult) {
+        _playbackResults.tryEmit(result)
     }
 
     fun updateVolumeState(

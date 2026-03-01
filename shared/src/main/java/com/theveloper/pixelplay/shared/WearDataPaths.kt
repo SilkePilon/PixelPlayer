@@ -11,6 +11,9 @@ object WearDataPaths {
     /** Message path for playback commands (watch -> phone) */
     const val PLAYBACK_COMMAND = "/playback_command"
 
+    /** Message path for playback command results (phone -> watch) */
+    const val PLAYBACK_RESULT = "/playback_result"
+
     /** Message path for volume commands (watch -> phone) */
     const val VOLUME_COMMAND = "/volume_command"
 

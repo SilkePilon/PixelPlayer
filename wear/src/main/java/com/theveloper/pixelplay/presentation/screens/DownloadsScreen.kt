@@ -7,6 +7,7 @@ import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -14,9 +15,15 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.ErrorOutline
+import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.MusicNote
+import androidx.compose.material.icons.rounded.PhoneAndroid
+import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Security
 import androidx.compose.runtime.Composable
@@ -46,13 +53,18 @@ import com.google.android.horologist.compose.layout.rememberResponsiveColumnStat
 import com.theveloper.pixelplay.presentation.components.AlwaysOnScalingPositionIndicator
 import com.theveloper.pixelplay.presentation.components.PlayingEqIcon
 import com.theveloper.pixelplay.presentation.components.WearTopTimeText
+import com.theveloper.pixelplay.presentation.theme.surfaceContainerHighestColor
 import com.theveloper.pixelplay.presentation.theme.LocalWearPalette
 import com.theveloper.pixelplay.presentation.theme.screenBackgroundColor
 import com.theveloper.pixelplay.presentation.theme.surfaceContainerColor
 import com.theveloper.pixelplay.presentation.theme.surfaceContainerHighColor
+import com.theveloper.pixelplay.data.local.LocalSongEntity
+import com.theveloper.pixelplay.presentation.viewmodel.WearDownloadsUiEvent
 import com.theveloper.pixelplay.presentation.viewmodel.WearDownloadsViewModel
 import com.theveloper.pixelplay.presentation.viewmodel.WearPlayerViewModel
 import com.theveloper.pixelplay.shared.WearTransferProgress
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collect
 
 /**
  * Screen showing songs stored locally on the watch.
@@ -69,7 +81,9 @@ fun DownloadsScreen(
     val deviceSongs by viewModel.deviceSongs.collectAsState()
     val isDeviceLibraryLoading by viewModel.isDeviceLibraryLoading.collectAsState()
     val deviceLibraryError by viewModel.deviceLibraryError.collectAsState()
+    val pendingPhonePlaybackSongId by viewModel.pendingPhonePlaybackSongId.collectAsState()
     val playerState by playerViewModel.playerState.collectAsState()
+    val isPhoneConnected by playerViewModel.isPhoneConnected.collectAsState()
     val palette = LocalWearPalette.current
     val columnState = rememberResponsiveColumnState()
     val context = LocalContext.current
@@ -83,6 +97,9 @@ fun DownloadsScreen(
     var hasAudioPermission by remember {
         mutableStateOf(hasAudioLibraryPermission(context, audioPermission))
     }
+    var selectedLocalSongForMenu by remember { mutableStateOf<LocalSongEntity?>(null) }
+    var selectedLocalSongForDeleteConfirmation by remember { mutableStateOf<LocalSongEntity?>(null) }
+    var inlineMessage by remember { mutableStateOf<String?>(null) }
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission(),
     ) { granted ->
@@ -94,6 +111,21 @@ fun DownloadsScreen(
     }
     LaunchedEffect(hasAudioPermission) {
         viewModel.refreshDeviceLibrary(hasPermission = hasAudioPermission)
+    }
+    LaunchedEffect(viewModel) {
+        viewModel.events.collect { event ->
+            when (event) {
+                is WearDownloadsUiEvent.Message -> inlineMessage = event.value
+                is WearDownloadsUiEvent.NavigateToPlayer -> onSongClick(event.songId)
+            }
+        }
+    }
+    LaunchedEffect(inlineMessage) {
+        val message = inlineMessage ?: return@LaunchedEffect
+        delay(4_000L)
+        if (inlineMessage == message) {
+            inlineMessage = null
+        }
     }
     val transferringStates = activeTransfers.values
         .filter { it.status == WearTransferProgress.STATUS_TRANSFERRING }
@@ -130,6 +162,37 @@ fun DownloadsScreen(
                         .fillMaxWidth()
                         .padding(bottom = 2.dp),
                 )
+            }
+
+            if (inlineMessage != null) {
+                item {
+                    Chip(
+                        label = {
+                            Text(
+                                text = inlineMessage.orEmpty(),
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                                color = palette.textPrimary,
+                            )
+                        },
+                        icon = {
+                            Icon(
+                                imageVector = Icons.Rounded.ErrorOutline,
+                                contentDescription = null,
+                                tint = palette.textError,
+                                modifier = Modifier.size(18.dp),
+                            )
+                        },
+                        onClick = { inlineMessage = null },
+                        colors = ChipDefaults.chipColors(
+                            backgroundColor = elevatedSurfaceContainer,
+                            contentColor = palette.chipContent,
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 4.dp),
+                    )
+                }
             }
 
             if (transferringStates.isNotEmpty()) {
@@ -283,64 +346,18 @@ fun DownloadsScreen(
                     } else {
                         ""
                     }
-                    Chip(
-                        label = {
-                            Text(
-                                text = song.title,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                color = palette.textPrimary,
-                            )
-                        },
-                        secondaryLabel = if (secondaryText.isNotEmpty() || isCurrentSong) {
-                            {
-                                Text(
-                                    text = if (isCurrentSong) {
-                                        if (secondaryText.isNotEmpty()) {
-                                            "${if (isPlayingSong) "Playing" else "Current"} · $secondaryText"
-                                        } else if (isPlayingSong) {
-                                            "Playing"
-                                        } else {
-                                            "Current"
-                                        }
-                                    } else {
-                                        secondaryText
-                                    },
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    color = if (isCurrentSong && isPlayingSong) {
-                                        palette.shuffleActive.copy(alpha = 0.90f)
-                                    } else {
-                                        palette.textSecondary.copy(alpha = 0.78f)
-                                    },
-                                )
-                            }
-                        } else null,
-                        icon = {
-                            if (isCurrentSong) {
-                                PlayingEqIcon(
-                                    color = if (isPlayingSong) palette.shuffleActive else palette.textSecondary,
-                                    isPlaying = isPlayingSong,
-                                    modifier = Modifier.size(18.dp),
-                                )
-                            } else {
-                                Icon(
-                                    imageVector = Icons.Rounded.MusicNote,
-                                    contentDescription = null,
-                                    tint = palette.textSecondary,
-                                    modifier = Modifier.size(18.dp),
-                                )
-                            }
-                        },
+                    DownloadedSongChip(
+                        title = song.title,
+                        secondaryText = secondaryText,
+                        isCurrentSong = isCurrentSong,
+                        isPlayingSong = isPlayingSong,
                         onClick = {
                             viewModel.playLocalSong(song.songId)
                             onSongClick(song.songId)
                         },
-                        colors = ChipDefaults.chipColors(
-                            backgroundColor = if (isCurrentSong) elevatedSurfaceContainer else surfaceContainer,
-                            contentColor = palette.chipContent,
-                        ),
-                        modifier = Modifier.fillMaxWidth(),
+                        onMenuClick = {
+                            selectedLocalSongForMenu = song
+                        },
                     )
                 }
             }
@@ -534,7 +551,396 @@ fun DownloadsScreen(
                 .zIndex(5f),
             color = palette.textPrimary,
         )
+
+        val menuSong = selectedLocalSongForMenu
+        if (menuSong != null) {
+            val isCurrentSong = menuSong.songId == playerState.songId && playerState.songId.isNotBlank()
+            val isPlayingSong = isCurrentSong && playerState.isPlaying
+            DownloadedSongActionScreen(
+                song = menuSong,
+                canPlayOnPhone = isPhoneConnected,
+                isPhonePlaybackPending = pendingPhonePlaybackSongId == menuSong.songId,
+                isCurrentWatchSong = isCurrentSong,
+                isPlayingWatchSong = isPlayingSong,
+                onDismiss = { selectedLocalSongForMenu = null },
+                onPlayOnWatch = {
+                    viewModel.playLocalSong(menuSong.songId)
+                    selectedLocalSongForMenu = null
+                    onSongClick(menuSong.songId)
+                },
+                onPlayOnPhone = {
+                    viewModel.playSongOnPhone(menuSong.songId)
+                    selectedLocalSongForMenu = null
+                },
+                onDeleteFromWatch = {
+                    selectedLocalSongForMenu = null
+                    selectedLocalSongForDeleteConfirmation = menuSong
+                },
+            )
+        }
+
+        val confirmDeleteSong = selectedLocalSongForDeleteConfirmation
+        if (confirmDeleteSong != null) {
+            ConfirmDeleteDownloadedSongScreen(
+                song = confirmDeleteSong,
+                onDismiss = { selectedLocalSongForDeleteConfirmation = null },
+                onConfirm = {
+                    viewModel.deleteSong(confirmDeleteSong.songId)
+                    selectedLocalSongForDeleteConfirmation = null
+                },
+            )
+        }
     }
+}
+
+@Composable
+private fun DownloadedSongChip(
+    title: String,
+    secondaryText: String,
+    isCurrentSong: Boolean,
+    isPlayingSong: Boolean,
+    onClick: () -> Unit,
+    onMenuClick: () -> Unit,
+) {
+    val palette = LocalWearPalette.current
+    val containerColor = if (isCurrentSong) {
+        palette.surfaceContainerHighColor()
+    } else {
+        palette.surfaceContainerColor()
+    }
+
+    Box(
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Chip(
+            label = {
+                Text(
+                    text = title,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    color = palette.textPrimary,
+                )
+            },
+            secondaryLabel = if (secondaryText.isNotEmpty() || isCurrentSong) {
+                {
+                    Text(
+                        text = if (isCurrentSong) {
+                            if (secondaryText.isNotEmpty()) {
+                                "${if (isPlayingSong) "Playing" else "Current"} · $secondaryText"
+                            } else if (isPlayingSong) {
+                                "Playing"
+                            } else {
+                                "Current"
+                            }
+                        } else {
+                            secondaryText
+                        },
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        color = if (isCurrentSong && isPlayingSong) {
+                            palette.shuffleActive.copy(alpha = 0.90f)
+                        } else {
+                            palette.textSecondary.copy(alpha = 0.78f)
+                        },
+                    )
+                }
+            } else {
+                null
+            },
+            icon = {
+                if (isCurrentSong) {
+                    PlayingEqIcon(
+                        color = if (isPlayingSong) palette.shuffleActive else palette.textSecondary,
+                        isPlaying = isPlayingSong,
+                        modifier = Modifier.size(18.dp),
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Rounded.MusicNote,
+                        contentDescription = null,
+                        tint = palette.textSecondary,
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
+            },
+            onClick = onClick,
+            colors = ChipDefaults.chipColors(
+                backgroundColor = containerColor,
+                contentColor = palette.chipContent,
+            ),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(end = 40.dp),
+        )
+
+        Box(
+            modifier = Modifier
+                .align(Alignment.CenterEnd)
+                .size(34.dp)
+                .background(
+                    color = palette.surfaceContainerHighColor().copy(alpha = 0.74f),
+                    shape = CircleShape,
+                )
+                .clickable(onClick = onMenuClick),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.MoreVert,
+                contentDescription = "More options",
+                tint = palette.textPrimary,
+                modifier = Modifier.size(18.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun DownloadedSongActionScreen(
+    song: LocalSongEntity,
+    canPlayOnPhone: Boolean,
+    isPhonePlaybackPending: Boolean,
+    isCurrentWatchSong: Boolean,
+    isPlayingWatchSong: Boolean,
+    onDismiss: () -> Unit,
+    onPlayOnWatch: () -> Unit,
+    onPlayOnPhone: () -> Unit,
+    onDeleteFromWatch: () -> Unit,
+) {
+    val palette = LocalWearPalette.current
+    val columnState = rememberResponsiveColumnState()
+    val subtitle = buildSongSubtitle(song.artist, song.album, song.duration)
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(palette.screenBackgroundColor())
+            .zIndex(12f),
+    ) {
+        ScalingLazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            columnState = columnState,
+        ) {
+            item { Spacer(modifier = Modifier.height(18.dp)) }
+
+            item {
+                Text(
+                    text = song.title,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.title3,
+                    color = palette.textPrimary,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 2.dp),
+                )
+            }
+
+            if (subtitle.isNotEmpty()) {
+                item {
+                    Text(
+                        text = subtitle,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        style = MaterialTheme.typography.caption2,
+                        color = palette.textSecondary.copy(alpha = 0.82f),
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 2.dp),
+                    )
+                }
+            }
+
+            item {
+                DownloadsActionChip(
+                    icon = Icons.Rounded.PlayArrow,
+                    label = when {
+                        isCurrentWatchSong && isPlayingWatchSong -> "Playing on watch"
+                        isCurrentWatchSong -> "Current on watch"
+                        else -> "Play on watch"
+                    },
+                    backgroundColor = palette.shuffleActive.copy(alpha = 0.38f),
+                    onClick = onPlayOnWatch,
+                )
+            }
+
+            item {
+                DownloadsActionChip(
+                    icon = Icons.Rounded.PhoneAndroid,
+                    label = when {
+                        isPhonePlaybackPending -> "Starting on phone..."
+                        !canPlayOnPhone -> "Phone disconnected"
+                        else -> "Play on phone"
+                    },
+                    backgroundColor = if (canPlayOnPhone && !isPhonePlaybackPending) {
+                        palette.repeatActive.copy(alpha = 0.38f)
+                    } else {
+                        palette.surfaceContainerHighestColor()
+                    },
+                    enabled = canPlayOnPhone && !isPhonePlaybackPending,
+                    onClick = onPlayOnPhone,
+                )
+            }
+
+            item {
+                DownloadsActionChip(
+                    icon = Icons.Rounded.Delete,
+                    label = "Delete from watch",
+                    backgroundColor = palette.favoriteActive.copy(alpha = 0.38f),
+                    onClick = onDeleteFromWatch,
+                )
+            }
+
+            item {
+                DownloadsActionChip(
+                    icon = Icons.Rounded.Close,
+                    label = "Back",
+                    backgroundColor = palette.surfaceContainerColor(),
+                    onClick = onDismiss,
+                )
+            }
+        }
+
+        AlwaysOnScalingPositionIndicator(
+            listState = columnState.state,
+            modifier = Modifier.align(Alignment.CenterEnd),
+            color = palette.textPrimary,
+        )
+
+        WearTopTimeText(
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .zIndex(5f),
+            color = palette.textPrimary,
+        )
+    }
+}
+
+@Composable
+private fun ConfirmDeleteDownloadedSongScreen(
+    song: LocalSongEntity,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    val palette = LocalWearPalette.current
+    val columnState = rememberResponsiveColumnState()
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(palette.screenBackgroundColor())
+            .zIndex(12f),
+    ) {
+        ScalingLazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            columnState = columnState,
+        ) {
+            item { Spacer(modifier = Modifier.height(18.dp)) }
+
+            item {
+                Text(
+                    text = "Delete from watch?",
+                    style = MaterialTheme.typography.title3,
+                    color = palette.textPrimary,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 2.dp),
+                )
+            }
+
+            item {
+                Text(
+                    text = song.title,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.body2,
+                    color = palette.textSecondary.copy(alpha = 0.86f),
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 2.dp),
+                )
+            }
+
+            item {
+                Text(
+                    text = "This only removes the downloaded copy from this watch.",
+                    style = MaterialTheme.typography.caption2,
+                    color = palette.textSecondary.copy(alpha = 0.78f),
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 4.dp),
+                )
+            }
+
+            item {
+                DownloadsActionChip(
+                    icon = Icons.Rounded.Delete,
+                    label = "Delete",
+                    backgroundColor = palette.favoriteActive.copy(alpha = 0.38f),
+                    onClick = onConfirm,
+                )
+            }
+
+            item {
+                DownloadsActionChip(
+                    icon = Icons.Rounded.Close,
+                    label = "Cancel",
+                    backgroundColor = palette.surfaceContainerColor(),
+                    onClick = onDismiss,
+                )
+            }
+        }
+
+        AlwaysOnScalingPositionIndicator(
+            listState = columnState.state,
+            modifier = Modifier.align(Alignment.CenterEnd),
+            color = palette.textPrimary,
+        )
+
+        WearTopTimeText(
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .zIndex(5f),
+            color = palette.textPrimary,
+        )
+    }
+}
+
+@Composable
+private fun DownloadsActionChip(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    backgroundColor: androidx.compose.ui.graphics.Color,
+    enabled: Boolean = true,
+    onClick: () -> Unit,
+) {
+    val palette = LocalWearPalette.current
+    Chip(
+        label = {
+            Text(
+                text = label,
+                color = if (enabled) palette.textPrimary else palette.textSecondary.copy(alpha = 0.72f),
+            )
+        },
+        icon = {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = if (enabled) palette.textPrimary else palette.textSecondary.copy(alpha = 0.72f),
+                modifier = Modifier.size(18.dp),
+            )
+        },
+        onClick = { if (enabled) onClick() },
+        colors = ChipDefaults.chipColors(
+            backgroundColor = backgroundColor,
+            contentColor = palette.chipContent,
+        ),
+        modifier = Modifier.fillMaxWidth(),
+    )
 }
 
 private fun hasAudioLibraryPermission(context: Context, permission: String): Boolean {

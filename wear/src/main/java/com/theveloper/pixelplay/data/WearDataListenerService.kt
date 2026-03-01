@@ -14,6 +14,7 @@ import com.google.android.gms.wearable.WearableListenerService
 import com.theveloper.pixelplay.presentation.WearMainActivity
 import com.theveloper.pixelplay.shared.WearBrowseResponse
 import com.theveloper.pixelplay.shared.WearDataPaths
+import com.theveloper.pixelplay.shared.WearPlaybackResult
 import com.theveloper.pixelplay.shared.WearPlayerState
 import com.theveloper.pixelplay.shared.WearTransferMetadata
 import com.theveloper.pixelplay.shared.WearTransferProgress
@@ -236,6 +237,17 @@ class WearDataListenerService : WearableListenerService() {
                     transferRepository.onProgressReceived(progress)
                 } catch (e: Exception) {
                     Timber.tag(TAG).e(e, "Failed to process transfer progress")
+                }
+            }
+
+            WearDataPaths.PLAYBACK_RESULT -> {
+                try {
+                    val resultJson = String(messageEvent.data, Charsets.UTF_8)
+                    val result = json.decodeFromString<WearPlaybackResult>(resultJson)
+                    stateRepository.setPhoneConnected(true)
+                    stateRepository.publishPlaybackResult(result)
+                } catch (e: Exception) {
+                    Timber.tag(TAG).e(e, "Failed to process playback result")
                 }
             }
 

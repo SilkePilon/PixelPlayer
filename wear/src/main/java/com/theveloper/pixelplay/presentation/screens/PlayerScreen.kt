@@ -960,15 +960,15 @@ private fun HeaderBlock(
             modifier = Modifier.fillMaxWidth(),
         )
 
-        if (isWatchOutputSelected) {
-            Text(
-                text = "On watch",
-                style = MaterialTheme.typography.caption3,
-                color = palette.shuffleActive.copy(alpha = 0.85f),
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
+//        if (isWatchOutputSelected) {
+//            Text(
+//                text = "On watch",
+//                style = MaterialTheme.typography.caption3,
+//                color = palette.shuffleActive.copy(alpha = 0.85f),
+//                textAlign = TextAlign.Center,
+//                modifier = Modifier.fillMaxWidth(),
+//            )
+//        }
     }
 }
 

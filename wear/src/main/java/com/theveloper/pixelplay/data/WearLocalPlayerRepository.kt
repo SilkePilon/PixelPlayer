@@ -85,6 +85,7 @@ class WearLocalPlayerRepository @Inject constructor(
     val localAlbumArt: StateFlow<Bitmap?> = _localAlbumArt.asStateFlow()
 
     private var positionUpdateJob: Job? = null
+    private var currentQueueSongIds: List<String> = emptyList()
     private var currentQueueSongsById: Map<String, LocalSongEntity> = emptyMap()
     private var currentQueueItemsById: Map<String, WearQueueSong> = emptyMap()
     private var lastPaletteSongId: String = ""
@@ -174,6 +175,7 @@ class WearLocalPlayerRepository @Inject constructor(
     ) {
         withContext(Dispatchers.Main) {
             val player = getOrCreatePlayer()
+            currentQueueSongIds = queueSongs.map { it.songId }
             currentQueueSongsById = queueSongIdToLocal
             currentQueueItemsById = queueSongs.associateBy { it.songId }
             lastPaletteSongId = ""
@@ -238,6 +240,33 @@ class WearLocalPlayerRepository @Inject constructor(
         exoPlayer?.seekTo(positionMs)
     }
 
+    suspend fun removeSongFromActiveQueue(songId: String) {
+        withContext(Dispatchers.Main) {
+            val queueIndex = currentQueueSongIds.indexOf(songId)
+            if (queueIndex == -1) return@withContext
+
+            val player = exoPlayer
+            if (player == null || currentQueueSongIds.size <= 1) {
+                release()
+                return@withContext
+            }
+
+            player.removeMediaItem(queueIndex)
+            currentQueueSongIds = currentQueueSongIds.toMutableList().apply {
+                removeAt(queueIndex)
+            }
+            currentQueueSongsById = currentQueueSongsById.toMutableMap().apply {
+                remove(songId)
+            }
+            currentQueueItemsById = currentQueueItemsById.toMutableMap().apply {
+                remove(songId)
+            }
+            if (lastPaletteSongId == songId) lastPaletteSongId = ""
+            if (lastArtworkSongId == songId) lastArtworkSongId = ""
+            updateState()
+        }
+    }
+
     /**
      * Stop local playback and release the player.
      */
@@ -250,6 +279,7 @@ class WearLocalPlayerRepository @Inject constructor(
         _localThemePalette.value = null
         _localPaletteSeedArgb.value = null
         _localAlbumArt.value = null
+        currentQueueSongIds = emptyList()
         currentQueueSongsById = emptyMap()
         currentQueueItemsById = emptyMap()
         lastPaletteSongId = ""

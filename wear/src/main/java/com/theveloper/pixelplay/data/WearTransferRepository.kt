@@ -395,16 +395,22 @@ class WearTransferRepository @Inject constructor(
     /**
      * Delete a locally stored song (file + Room entry).
      */
-    suspend fun deleteSong(songId: String) {
-        val song = localSongDao.getSongById(songId) ?: return
+    suspend fun deleteSong(songId: String): Result<Unit> {
+        val song = localSongDao.getSongById(songId)
+            ?: return Result.failure(IllegalArgumentException("Song not found on watch"))
         val file = File(song.localPath)
-        if (file.exists()) file.delete()
+        if (file.exists() && !file.delete()) {
+            return Result.failure(IllegalStateException("Couldn't remove the song file from watch"))
+        }
         song.artworkPath?.let { artwork ->
             val artworkFile = File(artwork)
-            if (artworkFile.exists()) artworkFile.delete()
+            if (artworkFile.exists() && !artworkFile.delete()) {
+                Timber.tag(TAG).w("Artwork cleanup failed for songId=%s path=%s", songId, artwork)
+            }
         }
         localSongDao.deleteById(songId)
         Timber.tag(TAG).d("Deleted local song: ${song.title}")
+        return Result.success(Unit)
     }
 
     /**

@@ -42,6 +42,7 @@ import com.theveloper.pixelplay.shared.WearBrowseResponse
 import com.theveloper.pixelplay.shared.WearDataPaths
 import com.theveloper.pixelplay.shared.WearLibraryItem
 import com.theveloper.pixelplay.shared.WearPlaybackCommand
+import com.theveloper.pixelplay.shared.WearPlaybackResult
 import com.theveloper.pixelplay.shared.WearThemePalette
 import com.theveloper.pixelplay.shared.WearTransferMetadata
 import com.theveloper.pixelplay.shared.WearTransferProgress
@@ -145,6 +146,9 @@ class WearCommandReceiver : WearableListenerService() {
         Timber.tag(TAG).d("Playback command: ${command.action}")
 
         when (command.action) {
+            WearPlaybackCommand.PLAY_ITEM -> {
+                handlePlayItem(command, messageEvent.sourceNodeId)
+            }
             WearPlaybackCommand.PLAY_FROM_CONTEXT -> {
                 handlePlayFromContext(command)
             }
@@ -221,6 +225,79 @@ class WearCommandReceiver : WearableListenerService() {
                         }
                     }
                 }
+            }
+        }
+    }
+
+    private fun handlePlayItem(command: WearPlaybackCommand, targetNodeId: String) {
+        val songId = command.songId
+        if (songId.isNullOrBlank()) {
+            scope.launch {
+                sendPlaybackResult(
+                    nodeId = targetNodeId,
+                    requestId = command.requestId,
+                    action = command.action,
+                    songId = null,
+                    success = false,
+                    error = "Missing song id",
+                )
+            }
+            return
+        }
+
+        scope.launch {
+            try {
+                val song = resolveSongForCommand(command)
+                if (song == null) {
+                    sendPlaybackResult(
+                        nodeId = targetNodeId,
+                        requestId = command.requestId,
+                        action = command.action,
+                        songId = songId,
+                        success = false,
+                        error = "This song is no longer available on phone",
+                    )
+                    return@launch
+                }
+
+                val cloudReady = ensureStartSongCloudUriResolved(song)
+                if (!cloudReady) {
+                    sendPlaybackResult(
+                        nodeId = targetNodeId,
+                        requestId = command.requestId,
+                        action = command.action,
+                        songId = song.id,
+                        success = false,
+                        error = "This song could not be opened on phone",
+                    )
+                    return@launch
+                }
+
+                val mediaItem = MediaItemBuilder.build(song)
+                getOrBuildMediaController { controller ->
+                    controller.setMediaItem(mediaItem)
+                    controller.prepare()
+                    controller.play()
+                    scope.launch {
+                        sendPlaybackResult(
+                            nodeId = targetNodeId,
+                            requestId = command.requestId,
+                            action = command.action,
+                            songId = song.id,
+                            success = true,
+                        )
+                    }
+                }
+            } catch (e: Exception) {
+                Timber.tag(TAG).e(e, "Failed to handle PLAY_ITEM")
+                sendPlaybackResult(
+                    nodeId = targetNodeId,
+                    requestId = command.requestId,
+                    action = command.action,
+                    songId = songId,
+                    success = false,
+                    error = e.message ?: "Failed to start playback on phone",
+                )
             }
         }
     }
@@ -566,6 +643,35 @@ class WearCommandReceiver : WearableListenerService() {
         }
 
         return musicRepository.getSongsByIds(listOf(songId)).first().firstOrNull()
+    }
+
+    private suspend fun sendPlaybackResult(
+        nodeId: String,
+        requestId: String?,
+        action: String,
+        songId: String?,
+        success: Boolean,
+        error: String? = null,
+    ) {
+        if (requestId.isNullOrBlank() || nodeId.isBlank()) return
+
+        val payload = json.encodeToString(
+            WearPlaybackResult(
+                requestId = requestId,
+                action = action,
+                songId = songId,
+                success = success,
+                error = error,
+            )
+        ).toByteArray(Charsets.UTF_8)
+
+        runCatching {
+            Wearable.getMessageClient(this@WearCommandReceiver)
+                .sendMessage(nodeId, WearDataPaths.PLAYBACK_RESULT, payload)
+                .await()
+        }.onFailure { sendError ->
+            Timber.tag(TAG).w(sendError, "Failed to send playback result to watch")
+        }
     }
 
     // ---- Browse request handling ----
