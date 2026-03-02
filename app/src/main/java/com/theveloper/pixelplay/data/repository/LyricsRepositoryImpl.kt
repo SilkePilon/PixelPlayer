@@ -1152,9 +1152,18 @@ class LyricsRepositoryImpl @Inject constructor(
         val updatedCount = AtomicInteger(0)
         val processedCount = AtomicInteger(0)
         val total = songs.size
-        
-        // Only scan songs that don't have lyrics
-        val songsToScan = songs.filter { it.lyrics.isNullOrBlank() }
+
+        val idsWithPersistedLyrics = songs
+            .mapNotNull { it.id.toLongOrNull() }
+            .chunked(900)
+            .flatMap { chunk -> lyricsDao.getSongIdsWithLyrics(chunk) }
+            .toHashSet()
+
+        // Only scan songs that don't already have persisted lyrics.
+        val songsToScan = songs.filter { song ->
+            val songId = song.id.toLongOrNull()
+            song.lyrics.isNullOrBlank() && (songId == null || songId !in idsWithPersistedLyrics)
+        }
         val skippedCount = total - songsToScan.size
         processedCount.addAndGet(skippedCount)
         
