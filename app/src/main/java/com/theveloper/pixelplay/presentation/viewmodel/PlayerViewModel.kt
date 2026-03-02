@@ -3793,9 +3793,10 @@ class PlayerViewModel @Inject constructor(
 
     fun selectSongForInfo(song: Song) {
         _selectedSongForInfo.value = song
-        if (!song.requiresHydration()) return
         viewModelScope.launch {
-            val hydrated = musicRepository.getSongsByIds(listOf(song.id)).first().firstOrNull() ?: return@launch
+            val hydrated = withContext(Dispatchers.IO) {
+                musicRepository.getSong(song.id).first()
+            } ?: return@launch
             if (_selectedSongForInfo.value?.id == song.id) {
                 _selectedSongForInfo.value = hydrated
             }
@@ -4069,14 +4070,22 @@ class PlayerViewModel @Inject constructor(
             var failCount = 0
 
             songs.forEach { song ->
+                val sourceSong = if (song.lyrics != null) {
+                    song
+                } else {
+                    withContext(Dispatchers.IO) {
+                        musicRepository.getSong(song.id).first()
+                    } ?: song
+                }
+
                 val result = metadataEditStateHolder.saveMetadata(
-                    song = song,
-                    newTitle = song.title,
-                    newArtist = song.artist,
-                    newAlbum = song.album,
+                    song = sourceSong,
+                    newTitle = sourceSong.title,
+                    newArtist = sourceSong.artist,
+                    newAlbum = sourceSong.album,
                     newGenre = newGenre,
-                    newLyrics = (song.lyrics ?: ""), // Ensure lyrics are string
-                    newTrackNumber = song.trackNumber,
+                    newLyrics = sourceSong.lyrics ?: "",
+                    newTrackNumber = sourceSong.trackNumber,
                     coverArtUpdate = null
                 )
 
