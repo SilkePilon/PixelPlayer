@@ -895,14 +895,14 @@ class MusicService : MediaLibraryService() {
                 }
             }
             requestWidgetAndWearRefreshWithFollowUp()
-            mediaSession?.let { refreshMediaSessionUi(it) }
+            mediaSession?.let { refreshMediaSessionUiWithFollowUp(it) }
         }
 
         override fun onMediaMetadataChanged(mediaMetadata: MediaMetadata) {
             // Some devices/apps deliver title/artist/art after transition callback.
             // Force an immediate publish for real-time watch metadata.
             requestWidgetFullUpdate(force = true)
-            mediaSession?.let { refreshMediaSessionUi(it) }
+            mediaSession?.let { refreshMediaSessionUiWithFollowUp(it) }
             // Apply ReplayGain volume adjustment for the new track
             applyReplayGain(mediaSession?.player?.currentMediaItem)
         }
@@ -1158,6 +1158,7 @@ class MusicService : MediaLibraryService() {
     // --- LÓGICA PARA ACTUALIZACIÓN DE WIDGETS Y DATOS ---
     private var debouncedWidgetUpdateJob: Job? = null
     private var followUpWidgetUpdateJob: Job? = null
+    private var followUpMediaSessionUiRefreshJob: Job? = null
     private val WIDGET_STATE_DEBOUNCE_MS = 300L
 
     private fun requestWidgetFullUpdate(force: Boolean = false) {
@@ -1638,21 +1639,6 @@ class MusicService : MediaLibraryService() {
     }
 
     private fun refreshMediaSessionUi(session: MediaSession) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            val player = session.player
-            val playbackState = player.playbackState
-            val isActivelyPlaying = player.playWhenReady &&
-                    playbackState != Player.STATE_IDLE &&
-                    playbackState != Player.STATE_ENDED
-            if (!isActivelyPlaying) {
-                Timber.tag(TAG).d(
-                    "Skipping media button preference update on API 31+ while inactive: " +
-                            "playWhenReady=${player.playWhenReady}, state=$playbackState"
-                )
-                return
-            }
-        }
-
         val buttons = buildMediaButtonPreferences(session)
         // setMediaButtonPreferences triggers a notification update internally via
         // MediaControllerListener.onMediaButtonPreferencesChanged → onUpdateNotificationInternal,
@@ -1661,6 +1647,20 @@ class MusicService : MediaLibraryService() {
         // Media3's shouldRunInForeground logic and can remove foreground status, leading to
         // ForegroundServiceStartNotAllowedException when async callbacks fire later.
         session.setMediaButtonPreferences(buttons)
+    }
+
+    private fun refreshMediaSessionUiWithFollowUp(
+        session: MediaSession,
+        delayMs: Long = 250L
+    ) {
+        refreshMediaSessionUi(session)
+        followUpMediaSessionUiRefreshJob?.cancel()
+        followUpMediaSessionUiRefreshJob = serviceScope.launch {
+            delay(delayMs)
+            if (mediaSession === session) {
+                refreshMediaSessionUi(session)
+            }
+        }
     }
 
     private fun updateManualShuffleState(
