@@ -1073,12 +1073,18 @@ interface MusicDao {
                 :filterMode = 1
                 AND songs.content_uri_string NOT LIKE 'telegram://%'
                 AND songs.content_uri_string NOT LIKE 'netease://%'
+                AND songs.content_uri_string NOT LIKE 'gdrive://%'
+                AND songs.content_uri_string NOT LIKE 'qqmusic://%'
+                AND songs.content_uri_string NOT LIKE 'navidrome://%'
             )
             OR (
                 :filterMode = 2
                 AND (
                     songs.content_uri_string LIKE 'telegram://%'
                     OR songs.content_uri_string LIKE 'netease://%'
+                    OR songs.content_uri_string LIKE 'gdrive://%'
+                    OR songs.content_uri_string LIKE 'qqmusic://%'
+                    OR songs.content_uri_string LIKE 'navidrome://%'
                 )
             )
         )
