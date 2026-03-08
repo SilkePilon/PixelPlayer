@@ -1300,11 +1300,13 @@ class MusicService : MediaLibraryService() {
                     resolvedIndex,
                     snapshot.currentPositionMs.coerceAtLeast(0L)
                 )
+                // Even paused restores must prepare the timeline so duration/seek state is
+                // available immediately when the UI opens after a cold start.
+                player.prepare()
                 player.repeatMode = safeRepeatMode
                 player.shuffleModeEnabled = false
                 isManualShuffleEnabled = snapshot.shuffleEnabled
                 if (snapshot.playWhenReady) {
-                    player.prepare()
                     player.playWhenReady = true
                 }
             } finally {

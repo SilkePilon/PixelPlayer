@@ -60,9 +60,37 @@ class PlaybackStateHolder @Inject constructor(
     // Internal State
     private var isSeeking = false
     private var remoteSeekUnlockJob: Job? = null
+    private var pausedPositionOverrideMediaId: String? = null
+    private var pausedPositionOverrideMs: Long? = null
+    private var coldStartSnapshotMediaId: String? = null
+    private var coldStartSnapshotPositionMs: Long? = null
 
     fun initialize(coroutineScope: CoroutineScope) {
         this.scope = coroutineScope
+        scope?.launch {
+            val snapshot = runCatching {
+                userPreferencesRepository.getPlaybackQueueSnapshotOnce()
+            }.getOrNull() ?: return@launch
+
+            val snapshotMediaId = snapshot.currentMediaId
+                ?: snapshot.items.getOrNull(snapshot.currentIndex)?.mediaId
+                ?: return@launch
+            val snapshotPositionMs = snapshot.currentPositionMs.coerceAtLeast(0L)
+            if (snapshotPositionMs <= 0L) return@launch
+
+            coldStartSnapshotMediaId = snapshotMediaId
+            coldStartSnapshotPositionMs = snapshotPositionMs
+
+            val controller = mediaController
+            if (
+                controller != null &&
+                !controller.isPlaying &&
+                controller.currentMediaItem?.mediaId == snapshotMediaId &&
+                _currentPosition.value == 0L
+            ) {
+                _currentPosition.value = snapshotPositionMs
+            }
+        }
     }
 
     fun setMediaController(controller: MediaController?) {
@@ -75,6 +103,66 @@ class PlaybackStateHolder @Inject constructor(
 
     fun setCurrentPosition(positionMs: Long) {
         _currentPosition.value = positionMs.coerceAtLeast(0L)
+    }
+
+    fun syncCurrentPositionFromPlayer(mediaId: String?, reportedPositionMs: Long) {
+        _currentPosition.value = resolveUiPosition(mediaId, reportedPositionMs)
+    }
+
+    fun rememberPausedPositionOverride(mediaId: String?, positionMs: Long) {
+        val safeMediaId = mediaId?.takeIf { it.isNotBlank() } ?: return
+        val safePosition = positionMs.coerceAtLeast(0L)
+        pausedPositionOverrideMediaId = safeMediaId
+        pausedPositionOverrideMs = safePosition
+        _currentPosition.value = safePosition
+    }
+
+    fun clearCurrentPositionHints(mediaId: String? = null) {
+        if (mediaId == null || pausedPositionOverrideMediaId == mediaId) {
+            pausedPositionOverrideMediaId = null
+            pausedPositionOverrideMs = null
+        }
+        if (mediaId == null || coldStartSnapshotMediaId == mediaId) {
+            coldStartSnapshotMediaId = null
+            coldStartSnapshotPositionMs = null
+        }
+    }
+
+    private fun resolveUiPosition(mediaId: String?, reportedPositionMs: Long): Long {
+        val safeReportedPosition = reportedPositionMs.coerceAtLeast(0L)
+        val safeMediaId = mediaId?.takeIf { it.isNotBlank() }
+        if (safeMediaId == null) {
+            return safeReportedPosition
+        }
+
+        val pausedOverride = pausedPositionOverrideMs
+            ?.takeIf { pausedPositionOverrideMediaId == safeMediaId }
+        val coldStartSeed = coldStartSnapshotPositionMs
+            ?.takeIf { coldStartSnapshotMediaId == safeMediaId }
+        val preferredPosition = pausedOverride ?: coldStartSeed
+
+        if (preferredPosition == null) {
+            return safeReportedPosition
+        }
+
+        if (safeReportedPosition <= 0L) {
+            return preferredPosition
+        }
+
+        val drift = abs(safeReportedPosition - preferredPosition)
+        if (drift <= DURATION_MISMATCH_TOLERANCE_MS || safeReportedPosition >= preferredPosition) {
+            if (pausedPositionOverrideMediaId == safeMediaId) {
+                pausedPositionOverrideMediaId = null
+                pausedPositionOverrideMs = null
+            }
+            if (coldStartSnapshotMediaId == safeMediaId) {
+                coldStartSnapshotMediaId = null
+                coldStartSnapshotPositionMs = null
+            }
+            return safeReportedPosition
+        }
+
+        return preferredPosition
     }
     
     /* -------------------------------------------------------------------------- */
@@ -136,8 +224,10 @@ class PlaybackStateHolder @Inject constructor(
         } else {
             remoteSeekUnlockJob?.cancel()
             castStateHolder.setRemotelySeeking(false)
-            mediaController?.seekTo(position)
-            setCurrentPosition(position)
+            val targetPosition = position.coerceAtLeast(0L)
+            val currentMediaId = mediaController?.currentMediaItem?.mediaId
+            rememberPausedPositionOverride(currentMediaId, targetPosition)
+            mediaController?.seekTo(targetPosition)
         }
     }
 
@@ -353,8 +443,9 @@ class PlaybackStateHolder @Inject constructor(
                          )
                          
                          listeningStatsTracker.onProgress(currentPosition, true)
-                         if (_currentPosition.value != currentPosition) {
-                             _currentPosition.value = currentPosition
+                         val resolvedPosition = resolveUiPosition(currentMediaId, currentPosition)
+                         if (_currentPosition.value != resolvedPosition) {
+                             _currentPosition.value = resolvedPosition
                          }
                          
                          _stablePlayerState.update { state ->

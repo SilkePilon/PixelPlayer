@@ -1989,6 +1989,18 @@ class PlayerViewModel @Inject constructor(
                 (castStateHolder.isRemotePlaybackActive.value || castStateHolder.isCastConnecting.value)
     }
 
+    private fun syncPlaybackPositionFromPlayer(
+        mediaId: String?,
+        reportedPositionMs: Long
+    ): Long {
+        playbackStateHolder.syncCurrentPositionFromPlayer(mediaId, reportedPositionMs)
+        val resolvedPosition = playbackStateHolder.currentPosition.value
+        if (resolvedPosition != _playerUiState.value.currentPosition) {
+            _playerUiState.update { it.copy(currentPosition = resolvedPosition) }
+        }
+        return resolvedPosition
+    }
+
     private fun setupMediaControllerListeners() {
         Trace.beginSection("PlayerViewModel.setupMediaControllerListeners")
         val playerCtrl = mediaController ?: return Trace.endSection()
@@ -2022,8 +2034,7 @@ class PlayerViewModel @Inject constructor(
                         totalDuration = resolvedDuration
                     )
                 }
-                playbackStateHolder.setCurrentPosition(initialPosition)
-                _playerUiState.update { it.copy(currentPosition = initialPosition) }
+                syncPlaybackPositionFromPlayer(mediaItem.mediaId, initialPosition)
                 viewModelScope.launch {
                     val uri = song.albumArtUriString?.toUri()
                     val currentUri = playbackStateHolder.stablePlayerState.value.currentSong?.albumArtUriString
@@ -2047,6 +2058,7 @@ class PlayerViewModel @Inject constructor(
                         playWhenReady = false
                     )
                 }
+                playbackStateHolder.clearCurrentPositionHints()
                 playbackStateHolder.setCurrentPosition(0L)
                 _playerUiState.update { it.copy(currentPosition = 0L) }
                 resetPlaybackAudioMetadata()
@@ -2077,10 +2089,7 @@ class PlayerViewModel @Inject constructor(
                 } else {
                     stopProgressUpdates()
                     val pausedPosition = playerCtrl.currentPosition.coerceAtLeast(0L)
-                    playbackStateHolder.setCurrentPosition(pausedPosition)
-                    if (pausedPosition != _playerUiState.value.currentPosition) {
-                        _playerUiState.update { it.copy(currentPosition = pausedPosition) }
-                    }
+                    syncPlaybackPositionFromPlayer(playerCtrl.currentMediaItem?.mediaId, pausedPosition)
                 }
             }
 
@@ -2151,13 +2160,15 @@ class PlayerViewModel @Inject constructor(
                                 playWhenReady = playerCtrl.playWhenReady
                             )
                         }
-                        playbackStateHolder.setCurrentPosition(0L)
-                        _playerUiState.update { it.copy(currentPosition = 0L) }
+                        val transitionPosition = syncPlaybackPositionFromPlayer(
+                            transitionedItem.mediaId,
+                            playerCtrl.currentPosition.coerceAtLeast(0L)
+                        )
 
                         song?.let { currentSongValue ->
                             listeningStatsTracker.onSongChanged(
                                 song = currentSongValue,
-                                positionMs = 0L,
+                                positionMs = transitionPosition,
                                 durationMs = resolvedDuration,
                                 isPlaying = playerCtrl.isPlaying
                             )
@@ -2181,6 +2192,7 @@ class PlayerViewModel @Inject constructor(
                                     totalDuration = 0L
                                 )
                             }
+                            playbackStateHolder.clearCurrentPositionHints()
                             resetPlaybackAudioMetadata()
                         }
                     }
@@ -2192,12 +2204,14 @@ class PlayerViewModel @Inject constructor(
                 refreshPlaybackAudioMetadata(playerCtrl)
                 if (playbackState == Player.STATE_READY) {
                     clearPreparingSongIfMatching(playerCtrl.currentMediaItem?.mediaId)
+                    val readyPosition = playerCtrl.currentPosition.coerceAtLeast(0L)
                     val songDurationHint = playbackStateHolder.stablePlayerState.value.currentSong?.duration ?: 0L
                     val resolvedDuration = playbackStateHolder.resolveDurationForPlaybackState(
                         reportedDurationMs = playerCtrl.duration,
                         songDurationHintMs = songDurationHint,
-                        currentPositionMs = playerCtrl.currentPosition.coerceAtLeast(0L)
+                        currentPositionMs = readyPosition
                     )
+                    syncPlaybackPositionFromPlayer(playerCtrl.currentMediaItem?.mediaId, readyPosition)
                     playbackStateHolder.updateStablePlayerState { it.copy(totalDuration = resolvedDuration) }
                     listeningStatsTracker.updateDuration(resolvedDuration)
                     startProgressUpdates()
@@ -2220,6 +2234,7 @@ class PlayerViewModel @Inject constructor(
                                 totalDuration = 0L
                             )
                         }
+                        playbackStateHolder.clearCurrentPositionHints()
                         playbackStateHolder.setCurrentPosition(0L)
                         _playerUiState.update { it.copy(currentPosition = 0L) }
                         resetPlaybackAudioMetadata()
@@ -3127,6 +3142,10 @@ class PlayerViewModel @Inject constructor(
 
     fun seekTo(position: Long) {
         playbackStateHolder.seekTo(position)
+        val resolvedPosition = playbackStateHolder.currentPosition.value
+        if (resolvedPosition != _playerUiState.value.currentPosition) {
+            _playerUiState.update { it.copy(currentPosition = resolvedPosition) }
+        }
     }
 
     fun nextSong() {
