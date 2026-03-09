@@ -19,6 +19,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Pause
+import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.SkipNext
+import androidx.compose.material.icons.rounded.SkipPrevious
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
@@ -34,10 +39,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import com.theveloper.pixelplay.R
 import com.theveloper.pixelplay.presentation.components.LocalMaterialTheme
 import kotlinx.coroutines.delay
 import racra.compose.smooth_corner_rect_library.AbsoluteSmoothCornerShape
@@ -146,7 +149,7 @@ fun AnimatedPlaybackControls(
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    painter = painterResource(R.drawable.rounded_skip_previous_24),
+                    imageVector = Icons.Rounded.SkipPrevious,
                     contentDescription = "Anterior",
                     tint = tintPreviousIcon,
                     modifier = Modifier.size(iconSize)
@@ -214,7 +217,7 @@ fun AnimatedPlaybackControls(
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    painter = painterResource(R.drawable.rounded_skip_next_24),
+                    imageVector = Icons.Rounded.SkipNext,
                     contentDescription = "Siguiente",
                     tint = tintNextIcon,
                     modifier = Modifier.size(iconSize)
@@ -236,9 +239,7 @@ private fun MorphingPlayPauseIcon(
         label = "playPauseCrossfade"
     ) { playing ->
         Icon(
-            painter = painterResource(
-                if (playing) R.drawable.rounded_pause_24 else R.drawable.rounded_play_arrow_24
-            ),
+            imageVector = if (playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
             contentDescription = if (playing) "Pausar" else "Reproducir",
             tint = tint,
             modifier = Modifier.size(size)

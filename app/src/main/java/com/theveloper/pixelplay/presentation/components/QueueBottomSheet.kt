@@ -86,6 +86,9 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.ClearAll
 import androidx.compose.material.icons.filled.LibraryAdd
+import androidx.compose.material.icons.rounded.Pause
+import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -1754,7 +1757,7 @@ private fun QueueMiniPlayer(
                 modifier = Modifier.size(44.dp),
             ) {
                 Icon(
-                    painter = if (isPlaying) painterResource(R.drawable.rounded_pause_24) else painterResource(R.drawable.rounded_play_arrow_24),
+                    imageVector = if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
                     contentDescription = if (isPlaying) "Pausar" else "Reproducir",
                 )
             }
@@ -1771,7 +1774,7 @@ private fun QueueMiniPlayer(
                 modifier = Modifier.size(44.dp),
             ) {
                 Icon(
-                    painter = painterResource(R.drawable.rounded_skip_next_24),
+                    imageVector = Icons.Rounded.SkipNext,
                     contentDescription = "Siguiente",
                 )
             }
