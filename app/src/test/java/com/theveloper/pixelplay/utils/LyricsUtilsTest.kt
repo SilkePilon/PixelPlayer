@@ -248,4 +248,30 @@ class LyricsUtilsTest {
         assertEquals("Hello world\ncontinuation line", synced[0].line)
         assertNull(synced[0].translation)
     }
+
+    @Test
+    fun parseLyrics_colonSubSecondSeparator_parsedAndPairedWithTranslation() {
+        // Some LRC files use [mm:ss:xx] (colon) instead of [mm:ss.xx] (dot)
+        val lrc = "[00:00.000]作词: イマニシ\n" +
+            "[00:01.000]作曲: イマニシ\n" +
+            "[00:22:43]愛情なんて忘れて\n" +
+            "[00:25:39]一人ワルツを踊る\n" +
+            "[00:22.43]忘掉爱情什么的\n" +
+            "[00:25.39]一个人舞动华尔兹"
+
+        val lyrics = LyricsUtils.parseLyrics(lrc)
+        val synced = requireNotNull(lyrics.synced)
+
+        // Credits + 2 paired lines = 4 lines
+        assertEquals(4, synced.size)
+
+        // The Japanese originals should be separate synced lines, not merged into credits
+        val line22 = synced.first { it.line == "愛情なんて忘れて" }
+        assertEquals(22_430, line22.time)
+        assertEquals("忘掉爱情什么的", line22.translation)
+
+        val line25 = synced.first { it.line == "一人ワルツを踊る" }
+        assertEquals(25_390, line25.time)
+        assertEquals("一个人舞动华尔兹", line25.translation)
+    }
 }

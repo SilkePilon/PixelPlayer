@@ -45,11 +45,11 @@ import kotlin.math.sin
 
 object LyricsUtils {
 
-    private val LRC_LINE_REGEX = Pattern.compile("^\\[(\\d{2}):(\\d{2})\\.(\\d{2,3})](.*)$")
+    private val LRC_LINE_REGEX = Pattern.compile("^\\[(\\d{2}):(\\d{2})[.:](\\d{2,3})](.*)$")
     private val LRC_WORD_REGEX = Pattern.compile("<(\\d{2}):(\\d{2})\\.(\\d{2,3})>([^<]*)")
     private val LRC_WORD_TAG_REGEX = Regex("<\\d{2}:\\d{2}\\.\\d{2,3}>")
     private val LRC_WORD_SPLIT_REGEX = Regex("(?=<\\d{2}:\\d{2}\\.\\d{2,3}>)")
-    private val LRC_TIMESTAMP_TAG_REGEX = Regex("\\[\\d{1,2}:\\d{2}(?:\\.\\d{1,3})?]")
+    private val LRC_TIMESTAMP_TAG_REGEX = Regex("\\[\\d{1,2}:\\d{2}[.:]\\d{1,3}]")
 
     /**
      * Parsea un String que contiene una letra en formato LRC o texto plano.
