@@ -127,6 +127,7 @@ class MusicService : MediaLibraryService() {
     private var replayGainRequestToken = 0L
     private var userSelectedVolume = 1f
     private var expectedReplayGainVolume: Float? = null
+    private var pendingReplayGainVolume: Float? = null
 
     private var favoriteSongIds = emptySet<String>()
     private var mediaSession: MediaLibraryService.MediaLibrarySession? = null
@@ -212,6 +213,10 @@ class MusicService : MediaLibraryService() {
         }
     }
 
+    private val transitionFinishedListener: () -> Unit = {
+        onTransitionFinished()
+    }
+
     override fun onCreate() {
         // Media3's Cast SDK callback path (MediaSessionImpl$$ExternalSyntheticLambda →
         // Util.postOrRun → MediaNotificationManager.updateNotificationInternal) calls
@@ -241,6 +246,7 @@ class MusicService : MediaLibraryService() {
 
         // Handle player swaps (crossfade) to keep MediaSession in sync
         engine.addPlayerSwapListener(playerSwapListener)
+        engine.addTransitionFinishedListener(transitionFinishedListener)
 
         controller.initialize()
         initializeCastWearSync()
@@ -1011,6 +1017,7 @@ class MusicService : MediaLibraryService() {
         }
 
         if (!replayGainEnabled) {
+            pendingReplayGainVolume = null
             if (!engine.isTransitionRunning()) {
                 setPlayerVolume(player, userSelectedVolume)
             }
@@ -1051,8 +1058,13 @@ class MusicService : MediaLibraryService() {
                 useAlbumGain = useAlbumGain
             )
 
-            // Only apply if we're not mid-crossfade
-            if (!engine.isTransitionRunning()) {
+            if (engine.isTransitionRunning()) {
+                // Store for application after transition completes
+                pendingReplayGainVolume = volume
+                Timber.tag(TAG).d("ReplayGain: Stored pending volume=%.2f for %s (transition running)",
+                    volume, mediaItem.mediaMetadata?.title)
+            } else {
+                pendingReplayGainVolume = null
                 setPlayerVolume(player, volume)
                 Timber.tag(TAG).d("ReplayGain: Applied volume=%.2f for %s",
                     volume, mediaItem.mediaMetadata?.title)
@@ -1064,6 +1076,27 @@ class MusicService : MediaLibraryService() {
         val clampedVolume = volume.coerceIn(0f, 1f)
         expectedReplayGainVolume = clampedVolume
         player.volume = clampedVolume
+    }
+
+    private fun onTransitionFinished() {
+        val player = engine.masterPlayer
+        val pending = pendingReplayGainVolume
+        pendingReplayGainVolume = null
+
+        if (!replayGainEnabled) {
+            setPlayerVolume(player, userSelectedVolume)
+            Timber.tag(TAG).d("ReplayGain: Transition finished, RG disabled — restored userSelectedVolume=%.2f", userSelectedVolume)
+            return
+        }
+
+        if (pending != null) {
+            setPlayerVolume(player, pending)
+            Timber.tag(TAG).d("ReplayGain: Transition finished, applied pending volume=%.2f", pending)
+        } else {
+            // No pending volume was computed during transition, trigger full computation
+            applyReplayGain(mediaSession?.player?.currentMediaItem)
+            Timber.tag(TAG).d("ReplayGain: Transition finished, no pending volume — triggering full recomputation")
+        }
     }
 
     private fun initializeCastWearSync() {
@@ -1202,6 +1235,7 @@ class MusicService : MediaLibraryService() {
         replayGainJob?.cancel()
 
         engine.removePlayerSwapListener(playerSwapListener)
+        engine.removeTransitionFinishedListener(transitionFinishedListener)
         engine.masterPlayer.removeListener(playerListener)
 
         mediaSession?.run {
