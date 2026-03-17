@@ -2239,16 +2239,6 @@ class MusicService : MediaLibraryService() {
 
     private fun buildMediaButtonPreferences(session: MediaSession): List<CommandButton> {
         val player = session.player
-        val previousButton = CommandButton.Builder(CommandButton.ICON_PREVIOUS)
-            .setDisplayName("Previous")
-            .setPlayerCommand(Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM)
-            .build()
-
-        val nextButton = CommandButton.Builder(CommandButton.ICON_NEXT)
-            .setDisplayName("Next")
-            .setPlayerCommand(Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM)
-            .build()
-
         val songId = player.currentMediaItem?.mediaId
         val isFavorite = isSongFavorite(songId)
         val likeButton = CommandButton.Builder(
@@ -2256,6 +2246,7 @@ class MusicService : MediaLibraryService() {
         )
             .setDisplayName("Like")
             .setSessionCommand(SessionCommand(MusicNotificationProvider.CUSTOM_COMMAND_LIKE, Bundle.EMPTY))
+            .setSlots(CommandButton.SLOT_OVERFLOW)
             .build()
 
         val shuffleOn = isManualShuffleEnabled
@@ -2269,6 +2260,7 @@ class MusicService : MediaLibraryService() {
         )
             .setDisplayName("Shuffle")
             .setSessionCommand(SessionCommand(shuffleCommandAction, Bundle.EMPTY))
+            .setSlots(CommandButton.SLOT_OVERFLOW)
             .build()
 
         val repeatButton = CommandButton.Builder(
@@ -2280,9 +2272,15 @@ class MusicService : MediaLibraryService() {
         )
             .setDisplayName("Repeat")
             .setSessionCommand(SessionCommand(MusicNotificationProvider.CUSTOM_COMMAND_CYCLE_REPEAT_MODE, Bundle.EMPTY))
+            .setSlots(CommandButton.SLOT_OVERFLOW)
             .build()
 
-        return listOf(previousButton, nextButton, likeButton, shuffleButton, repeatButton)
+        // Let Media3 provide the primary previous/play-next transport buttons from player
+        // commands instead of advertising custom back/forward slots here. When custom
+        // SLOT_BACK/SLOT_FORWARD buttons are present, Media3 strips the legacy
+        // ACTION_SKIP_TO_PREVIOUS/NEXT flags from PlaybackStateCompat, which causes some
+        // OEM compact system players (including ColorOS Control Center) to gray out skip.
+        return listOf(likeButton, shuffleButton, repeatButton)
     }
 
     // ------------------------
