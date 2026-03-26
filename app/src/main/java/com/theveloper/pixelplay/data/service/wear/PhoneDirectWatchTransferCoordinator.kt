@@ -516,6 +516,7 @@ class PhoneDirectWatchTransferCoordinator @Inject constructor(
             return
         }
         val channel = channelClient.openChannel(nodeId, WearDataPaths.TRANSFER_CHANNEL).await()
+        var shouldForceCloseChannel = true
 
         try {
             val outputStream = channelClient.getOutputStream(channel).await()
@@ -561,6 +562,7 @@ class PhoneDirectWatchTransferCoordinator @Inject constructor(
 
             outputStream.flush()
             outputStream.close()
+            shouldForceCloseChannel = false
 
             sendTransferProgress(
                 nodeId = nodeId,
@@ -582,7 +584,9 @@ class PhoneDirectWatchTransferCoordinator @Inject constructor(
                 error = error.message,
             )
         } finally {
-            runCatching { channelClient.close(channel).await() }
+            if (shouldForceCloseChannel) {
+                runCatching { channelClient.close(channel).await() }
+            }
             transferCancellationStore.clear(requestId)
         }
     }
@@ -595,6 +599,7 @@ class PhoneDirectWatchTransferCoordinator @Inject constructor(
     ) {
         if (artworkBytes.isEmpty()) return
         val channel = channelClient.openChannel(nodeId, WearDataPaths.TRANSFER_ARTWORK_CHANNEL).await()
+        var shouldForceCloseChannel = true
         try {
             val outputStream = channelClient.getOutputStream(channel).await()
             val requestIdBytes = requestId.toByteArray(Charsets.UTF_8)
@@ -607,8 +612,11 @@ class PhoneDirectWatchTransferCoordinator @Inject constructor(
             outputStream.write(artworkBytes)
             outputStream.flush()
             outputStream.close()
+            shouldForceCloseChannel = false
         } finally {
-            runCatching { channelClient.close(channel).await() }
+            if (shouldForceCloseChannel) {
+                runCatching { channelClient.close(channel).await() }
+            }
         }
     }
 

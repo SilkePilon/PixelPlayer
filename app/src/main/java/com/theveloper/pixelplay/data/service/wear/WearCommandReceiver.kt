@@ -1821,6 +1821,7 @@ class WearCommandReceiver : WearableListenerService() {
         }
         val channelClient = Wearable.getChannelClient(this@WearCommandReceiver)
         val channel = channelClient.openChannel(nodeId, WearDataPaths.TRANSFER_CHANNEL).await()
+        var shouldForceCloseChannel = true
 
         try {
             val outputStream = channelClient.getOutputStream(channel).await()
@@ -1865,6 +1866,7 @@ class WearCommandReceiver : WearableListenerService() {
 
             outputStream.flush()
             outputStream.close()
+            shouldForceCloseChannel = false
 
             // Send completion status
             sendTransferProgress(
@@ -1880,10 +1882,12 @@ class WearCommandReceiver : WearableListenerService() {
                 WearTransferProgress.STATUS_FAILED, e.message,
             )
         } finally {
-            try {
-                channelClient.close(channel).await()
-            } catch (e: Exception) {
-                Timber.tag(TAG).w(e, "Failed to close channel")
+            if (shouldForceCloseChannel) {
+                try {
+                    channelClient.close(channel).await()
+                } catch (e: Exception) {
+                    Timber.tag(TAG).w(e, "Failed to close channel")
+                }
             }
             transferCancellationStore.clear(requestId)
         }
@@ -1902,6 +1906,7 @@ class WearCommandReceiver : WearableListenerService() {
         if (artworkBytes.isEmpty()) return
         val channelClient = Wearable.getChannelClient(this@WearCommandReceiver)
         val channel = channelClient.openChannel(nodeId, WearDataPaths.TRANSFER_ARTWORK_CHANNEL).await()
+        var shouldForceCloseChannel = true
         try {
             val outputStream = channelClient.getOutputStream(channel).await()
             val requestIdBytes = requestId.toByteArray(Charsets.UTF_8)
@@ -1914,13 +1919,16 @@ class WearCommandReceiver : WearableListenerService() {
             outputStream.write(artworkBytes)
             outputStream.flush()
             outputStream.close()
+            shouldForceCloseChannel = false
 
             Timber.tag(TAG).d(
                 "Artwork transfer complete: songId=$songId, bytes=${artworkBytes.size}"
             )
         } finally {
-            runCatching { channelClient.close(channel).await() }
-                .onFailure { error -> Timber.tag(TAG).w(error, "Failed to close artwork channel") }
+            if (shouldForceCloseChannel) {
+                runCatching { channelClient.close(channel).await() }
+                    .onFailure { error -> Timber.tag(TAG).w(error, "Failed to close artwork channel") }
+            }
         }
     }
 
