@@ -134,6 +134,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.ui.text.style.TextGeometricTransform
 import androidx.compose.ui.text.style.TextOverflow
 import com.theveloper.pixelplay.presentation.components.subcomps.PlayingEqIcon
+import com.theveloper.pixelplay.utils.MultiLangRomanizer
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -188,8 +189,18 @@ fun LyricsSheet(
     val lyrics by remember { derivedStateOf { stablePlayerState.lyrics } }
     val isPlaying by remember { derivedStateOf { stablePlayerState.isPlaying } }
     val currentSong by remember { derivedStateOf { stablePlayerState.currentSong } }
-    val hasTranslatedSyncedLyrics = remember(lyrics) {
+
+    val hasTranslatedLyrics = remember(lyrics) {
+        // Translated lyrics read same timestamp on the lrc, not possible in plain type lyrics
         lyrics?.synced?.any { !it.translation.isNullOrBlank() } == true
+    }
+
+    val hasRomanizedLyrics = remember(lyrics) {
+        val hasSynced = lyrics?.synced?.any { !it.romanization.isNullOrBlank() } == true
+        val hasPlain = lyrics?.plain?.any { line ->
+            MultiLangRomanizer.isScriptThatNeedsRomanization(line)
+        } == true
+        hasSynced || hasPlain
     }
 
     val context = LocalContext.current
@@ -199,10 +210,18 @@ fun LyricsSheet(
         context.dataStore.data.map { it[stringPreferencesKey("lyrics_alignment")] ?: "left" }
     }
     val lyricsAlignment by lyricsAlignmentFlow.collectAsStateWithLifecycle(initialValue = "left")
+
+    // Read lyrics translation preference internally from DataStore
     val showLyricsTranslationFlow = remember(context) {
         context.dataStore.data.map { it[booleanPreferencesKey("show_lyrics_translation")] ?: true }
     }
     val showLyricsTranslation by showLyricsTranslationFlow.collectAsStateWithLifecycle(initialValue = true)
+
+    // Read lyrics romanization preference internally from DataStore
+    val showLyricsRomanizationFlow = remember(context) {
+        context.dataStore.data.map { it[booleanPreferencesKey("show_lyrics_romanization")] ?: true }
+    }
+    val showLyricsRomanization by showLyricsRomanizationFlow.collectAsStateWithLifecycle(initialValue = true)
 
     // Read animated lyrics preference internally from DataStore
     val useAnimatedLyricsFlow = remember(context) {
@@ -239,8 +258,8 @@ fun LyricsSheet(
     var showSyncedLyrics by remember(lyrics) {
         mutableStateOf(
             when {
-                lyrics?.synced != null -> true
-                lyrics?.plain != null -> false
+                !lyrics?.synced.isNullOrEmpty() -> true
+                !lyrics?.plain.isNullOrEmpty() -> false
                 else -> null
             }
         )
@@ -577,6 +596,7 @@ fun LyricsSheet(
                                 immersiveMode = immersiveMode,
                                 lyricsAlignment = lyricsAlignment,
                                 showTranslation = showLyricsTranslation,
+                                showRomanization = showLyricsRomanization,
                                 footer = {
                                     if (lyrics?.areFromRemote == true) {
                                         item(key = "provider_text") {
@@ -616,6 +636,8 @@ fun LyricsSheet(
                                         line = line,
                                         style = lyricsTextStyle,
                                         lyricsAlignment = lyricsAlignment,
+                                        showTranslation = if (hasTranslatedLyrics) showLyricsTranslation else true,
+                                        showRomanization = if (hasRomanizedLyrics) showLyricsRomanization else true,
                                         modifier = Modifier.fillMaxWidth()
                                     )
                                     Spacer(modifier = Modifier.height(16.dp))
@@ -777,7 +799,7 @@ fun LyricsSheet(
                     backgroundColor = backgroundColor,
                     onBackgroundColor = onBackgroundColor,
                     accentColor = accentColor,
-                    onAccentColor = onAccentColor
+                    onAccentColor = onAccentColor,
                 )
              }
             }
@@ -817,8 +839,10 @@ fun LyricsSheet(
                             }
                         }
                     },
-                    hasTranslatedLyrics = hasTranslatedSyncedLyrics,
+                    hasTranslatedLyrics = hasTranslatedLyrics,
+                    hasRomanizedLyrics = hasRomanizedLyrics,
                     showTranslation = showLyricsTranslation,
+                    showRomanization = showLyricsRomanization,
                     onShowTranslationChange = { enabled ->
                         resetImmersiveTimer()
                         coroutineScope.launch {
@@ -827,6 +851,15 @@ fun LyricsSheet(
                             }
                         }
                     },
+                    onShowRomanizationChange = { enabled ->
+                        resetImmersiveTimer()
+                        coroutineScope.launch {
+                            context.dataStore.edit { preferences ->
+                                preferences[booleanPreferencesKey("show_lyrics_romanization")] = enabled
+                            }
+                        }
+                    },
+                    immersiveLyricsEnabled = immersiveLyricsEnabled,
                     isShuffleEnabled = isShuffleEnabled,
                     repeatMode = repeatMode,
                     isFavoriteProvider = isFavoriteProvider,
@@ -935,6 +968,7 @@ fun SyncedLyricsList(
     immersiveMode: Boolean = false,
     lyricsAlignment: String = "left",
     showTranslation: Boolean = true,
+    showRomanization: Boolean = true,
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(0.dp),
     footer: LazyListScope.() -> Unit = {}
@@ -1038,6 +1072,7 @@ fun SyncedLyricsList(
                             immersiveMode = immersiveMode,
                             lyricsAlignment = lyricsAlignment,
                             showTranslation = showTranslation,
+                            showRomanization = showRomanization,
                             accentColor = accentColor,
                             style = textStyle,
                             modifier = parallaxModifier
@@ -1377,13 +1412,36 @@ fun PlainLyricsLine(
     style: TextStyle,
     lyricsAlignment: String = "left",
     showTranslation: Boolean = true,
+    showRomanization: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     val sanitizedLines = remember(line) { line.split("\n") }
     val primaryText = remember(sanitizedLines) { if (sanitizedLines.isNotEmpty()) sanitizeLyricLineText(sanitizedLines[0]) else "" }
 
-    val translationText = remember(sanitizedLines) {
-        if (sanitizedLines.size > 1) sanitizedLines.drop(1).joinToString("\n") { sanitizeLyricLineText(it) } else ""
+    val isRomanizedScript = remember(primaryText) {
+        MultiLangRomanizer.isScriptThatNeedsRomanization(primaryText)
+    }
+
+    val translationText = remember(sanitizedLines, primaryText, isRomanizedScript) {
+        if (sanitizedLines.size > 1) {
+            val firstExtra = sanitizedLines[1]
+            val rest = if (sanitizedLines.size > 2) sanitizedLines.drop(2).joinToString("\n") { sanitizeLyricLineText(it) } else ""
+            
+            val isLatin = firstExtra.any { it.code in 32..126 } 
+            val isFirstRomanization = isRomanizedScript && isLatin
+
+            if (isFirstRomanization) rest else sanitizedLines.drop(1).joinToString("\n") { sanitizeLyricLineText(it) }
+        } else ""
+    }
+
+    val romanizationText = remember(sanitizedLines, primaryText, isRomanizedScript) {
+         if (sanitizedLines.size > 1) {
+            val firstExtra = sanitizedLines[1]
+            val isLatin = firstExtra.any { it.code in 32..126 } 
+            val isFirstRomanization = isRomanizedScript && isLatin
+            
+            if (isFirstRomanization) sanitizeLyricLineText(firstExtra) else ""
+        } else ""
     }
 
     val textAlign = when (lyricsAlignment) { "center" -> TextAlign.Center; "right" -> TextAlign.Right; else -> TextAlign.Left }
@@ -1401,13 +1459,23 @@ fun PlainLyricsLine(
         if (primaryText.isNotBlank()) {
             Text(text = primaryText, style = style, color = LocalContentColor.current.copy(alpha = 0.7f), textAlign = textAlign)
 
+            if (showRomanization && romanizationText.isNotBlank()) {
+                Text(
+                    text = romanizationText,
+                    style = translationStyle,
+                    color = translationColor,
+                    textAlign = textAlign,
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+            }
+
             if (showTranslation && translationText.isNotBlank()) {
                 Text(
                     text = translationText,
                     style = translationStyle,
                     color = translationColor,
                     textAlign = textAlign,
-                    modifier = Modifier.padding(top = 4.dp)
+                    modifier = Modifier.padding(top = if (showRomanization && romanizationText.isNotBlank()) 2.dp else 4.dp)
                 )
             }
         }

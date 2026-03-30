@@ -108,7 +108,20 @@ object MultiLangRomanizer {
     fun isHindi(text: String) = text.any { it in '\u0900'..'\u097F' }
     fun isPunjabi(text: String) = text.any { it in '\u0A00'..'\u0A7F' }
     fun isCyrillic(text: String) = text.any { it in '\u0400'..'\u04FF' }
-    fun isChinese(text: String) = text.any { it in '\u4E00'..'\u9FFF' } && !isJapanese(text) && !isKorean(text)
+    fun isChinese(text: String) = text.any { it in '\u4E00'..'\u9FFF' }
+
+    fun isScriptThatNeedsRomanization(text: String): Boolean {
+        return text.any { char ->
+            val code = char.code
+            code in 0x3040..0x309F || // Hiragana
+            code in 0x30A0..0x30FF || // Katakana
+            code in 0x4E00..0x9FFF || // CJK Unified Ideographs (Chinese)
+            code in 0xAC00..0xD7A3 || // Hangul (Korean)
+            code in 0x0900..0x097F || // Devanagari (Hindi)
+            code in 0x0A00..0x0A7F || // Gurmukhi (Punjabi)
+            code in 0x0400..0x04FF    // Cyrillic
+        }
+    }
 
     private fun isRussian(text: String) = text.any { RUSSIAN_CYRILLIC_LETTERS.contains(it.toString()) } && text.all { RUSSIAN_CYRILLIC_LETTERS.contains(it.toString()) || !it.toString().matches("[\\u0400-\\u04FF]".toRegex()) }
     private fun isUkrainian(text: String) = text.any { UKRAINIAN_CYRILLIC_LETTERS.contains(it.toString()) || UKRAINIAN_SPECIFIC_CYRILLIC_LETTERS.contains(it.toString()) } && text.all { UKRAINIAN_CYRILLIC_LETTERS.contains(it.toString()) || UKRAINIAN_SPECIFIC_CYRILLIC_LETTERS.contains(it.toString()) || !it.toString().matches("[\\u0400-\\u04FF]".toRegex()) }
@@ -393,6 +406,7 @@ object LyricsUtils {
     private val LRC_WORD_SPLIT_REGEX = Regex("(?=<\\d{2}:\\d{2}[.:]\\d{2,3}>)")
     private val LRC_TIMESTAMP_TAG_REGEX = Regex("\\[\\d{1,2}:\\d{2}(?:[.:]\\d{1,3})?]")
     private val TRANSLATION_CREDIT_REGEX = Regex("^\\s*by\\s*[:：].+", RegexOption.IGNORE_CASE)
+    private val LRC_METADATA_PATTERN = Pattern.compile("^\\[[a-zA-Z]+:.*]$")
 
     /**
      * Parsea un String que contiene una letra en formato LRC o texto plano.
@@ -410,7 +424,7 @@ object LyricsUtils {
 
         lyricsText.lines().forEach { rawLine ->
             val line = sanitizeLrcLine(rawLine)
-            if (line.isEmpty()) return@forEach
+            if (line.isEmpty() || LRC_METADATA_PATTERN.matcher(line).matches()) return@forEach
 
             val lineMatcher = LRC_LINE_REGEX.matcher(line)
             if (lineMatcher.matches()) {
@@ -514,26 +528,15 @@ object LyricsUtils {
 
                 val origTrans = line.translation?.trim()
 
-                val newTranslation = if (!romanized.isNullOrEmpty()) {
-                    if (origTrans.isNullOrEmpty()) {
-                        romanized
-                    } else {
-                        val cleanRom = romanized.replace(Regex("[^a-zA-Z0-9]"), "").lowercase()
-                        val cleanTrans = origTrans.replace(Regex("[^a-zA-Z0-9]"), "").lowercase()
-
-                        if (cleanTrans.contains(cleanRom) || cleanRom.contains(cleanTrans)) {
-                            origTrans
-                        } else {
-                            "$romanized\n$origTrans"
-                        }
-                    }
-                } else {
-                    origTrans
-                }
-
-                line.copy(translation = newTranslation)
+                line.copy(romanization = romanized)
             }
-            val plainVersion = pairedLines.map { it.line }
+            val plainVersion = pairedLines.map { line ->
+                buildString {
+                    append(line.line)
+                    if (!line.romanization.isNullOrEmpty()) append("\n").append(line.romanization)
+                    if (!line.translation.isNullOrEmpty()) append("\n").append(line.translation)
+                }
+            }
             Lyrics(synced = pairedLines, plain = plainVersion)
         } else {
             val processedPlain = plainLines.map { line ->
