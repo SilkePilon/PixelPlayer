@@ -251,6 +251,7 @@ fun LyricsSheet(
     // Save lyrics dialog state
     var showSaveLyricsDialog by remember { mutableStateOf(false) }
     var showSyncControls by remember { mutableStateOf(false) }
+    var previewSeekPositionMs by remember(currentSong?.id) { mutableStateOf<Long?>(null) }
 
     var showSyncedLyrics by remember(lyrics) {
         mutableStateOf(
@@ -575,6 +576,7 @@ fun LyricsSheet(
                                 listState = syncedListState,
                                 playbackPositionFlow = playbackPositionFlow,
                                 lyricsSyncOffset = lyricsSyncOffset,
+                                positionOverrideMs = previewSeekPositionMs,
                                 accentColor = accentColor,
                                 textStyle = scaledTextStyle,
                                 onLineClick = { syncedLine -> 
@@ -780,6 +782,7 @@ fun LyricsSheet(
                         accentColor = accentColor,
                         totalDuration = stablePlayerState.totalDuration,
                         onSeekTo = onSeekTo,
+                        onSeekPreviewChange = { previewSeekPositionMs = it },
                         isPlaying = isPlaying
                     )
                 }
@@ -958,6 +961,7 @@ private fun LyricsPlaybackSeekBar(
     accentColor: Color,
     totalDuration: Long,
     onSeekTo: (Long) -> Unit,
+    onSeekPreviewChange: (Long?) -> Unit,
     isPlaying: Boolean,
     modifier: Modifier = Modifier
 ) {
@@ -970,6 +974,7 @@ private fun LyricsPlaybackSeekBar(
         currentPosition = playbackPosition,
         totalDuration = totalDuration,
         onSeek = onSeekTo,
+        onSeekPreview = onSeekPreviewChange,
         isPlaying = isPlaying,
         modifier = modifier
     )
@@ -982,6 +987,7 @@ fun SyncedLyricsList(
     listState: LazyListState,
     playbackPositionFlow: StateFlow<Long>,
     lyricsSyncOffset: Int,
+    positionOverrideMs: Long? = null,
     accentColor: Color,
     textStyle: TextStyle,
     onLineClick: (SyncedLine) -> Unit,
@@ -1001,15 +1007,17 @@ fun SyncedLyricsList(
 ) {
     val density = LocalDensity.current
     val playbackPosition by playbackPositionFlow.collectAsStateWithLifecycle()
-    val position = remember(playbackPosition, lyricsSyncOffset) {
-        (playbackPosition + lyricsSyncOffset).coerceAtLeast(0L)
+    val position = remember(playbackPosition, lyricsSyncOffset, positionOverrideMs) {
+        positionOverrideMs ?: (playbackPosition + lyricsSyncOffset).coerceAtLeast(0L)
     }
+    val isPreviewSeeking = positionOverrideMs != null
     val currentLineIndex by remember(position, lines) {
         derivedStateOf {
             resolveCurrentLineIndex(lines = lines, position = position)
         }
     }
     var hasAlignedInitialLine by remember(lines) { mutableStateOf(false) }
+    var lastAutoScrolledLineIndex by remember(lines) { mutableIntStateOf(-1) }
 
     BoxWithConstraints(modifier = modifier) {
         val metrics = remember(maxHeight, highlightZoneFraction, highlightOffsetDp) {
@@ -1026,7 +1034,7 @@ fun SyncedLyricsList(
         )
         val flingBehavior = rememberSnapperFlingBehavior(layoutInfo = snapperLayoutInfo)
 
-        LaunchedEffect(currentLineIndex, lines.size, metrics) {
+        LaunchedEffect(currentLineIndex, lines.size, metrics, isPreviewSeeking) {
             if (lines.isEmpty()) return@LaunchedEffect
             if (currentLineIndex !in lines.indices) return@LaunchedEffect
             if (listState.layoutInfo.totalItemsCount == 0) return@LaunchedEffect
@@ -1039,10 +1047,37 @@ fun SyncedLyricsList(
                     targetIndex = currentLineIndex
                 )
                 hasAlignedInitialLine = true
+                lastAutoScrolledLineIndex = currentLineIndex
                 return@LaunchedEffect
             }
 
-            if (listState.isScrollInProgress) return@LaunchedEffect
+            if (listState.isScrollInProgress && !isPreviewSeeking) return@LaunchedEffect
+
+            val lineJumpDistance = if (lastAutoScrolledLineIndex >= 0) {
+                abs(currentLineIndex - lastAutoScrolledLineIndex)
+            } else {
+                0
+            }
+
+            if (isPreviewSeeking) {
+                if (lineJumpDistance > 2) {
+                    listState.scrollToItem(currentLineIndex)
+                    snapToSnapIndex(
+                        listState = listState,
+                        layoutInfo = snapperLayoutInfo,
+                        targetIndex = currentLineIndex
+                    )
+                } else {
+                    animateToSnapIndex(
+                        listState = listState,
+                        layoutInfo = snapperLayoutInfo,
+                        targetIndex = currentLineIndex,
+                        animationSpec = tween(durationMillis = 110, easing = FastOutSlowInEasing)
+                    )
+                }
+                lastAutoScrolledLineIndex = currentLineIndex
+                return@LaunchedEffect
+            }
 
             // Music Style Dynamic Velocity
             val dynamicAnimationSpec = if (useAnimatedLyrics) {
@@ -1064,6 +1099,7 @@ fun SyncedLyricsList(
                 targetIndex = currentLineIndex,
                 animationSpec = dynamicAnimationSpec
             )
+            lastAutoScrolledLineIndex = currentLineIndex
         }
 
         Box(modifier = Modifier.fillMaxSize()) {
