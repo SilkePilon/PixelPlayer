@@ -28,9 +28,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.expandVertically
 import androidx.compose.animation.scaleIn
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
@@ -70,6 +68,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
@@ -636,6 +635,50 @@ class MainActivity : ComponentActivity() {
         } else {
             0.dp
         }
+        val animatedBottomBarPadding by animateDpAsState(
+            targetValue = if (navBarStyle == NavBarStyle.FULL_WIDTH) 0.dp else systemNavBarInset,
+            animationSpec = tween(400),
+            label = "BottomBarPadding"
+        )
+        val bottomBarPadding = animatedBottomBarPadding
+        val navBarHeight = if (navBarStyle == NavBarStyle.DEFAULT) {
+            NavBarContentHeight
+        } else {
+            NavBarContentHeightFullWidth + systemNavBarInset
+        }
+        val navBarOccupiedHeight by remember(navBarHeight, bottomBarPadding) {
+            derivedStateOf { navBarHeight + bottomBarPadding }
+        }
+        val navBarVisibilityProgress by animateFloatAsState(
+            targetValue = if (shouldHideNavigationBar) 0f else 1f,
+            animationSpec = tween(
+                durationMillis = 220,
+                easing = LinearOutSlowInEasing
+            ),
+            label = "NavBarVisibilityProgress"
+        )
+        val visibleNavBarOccupiedHeight by remember(navBarOccupiedHeight, navBarVisibilityProgress) {
+            derivedStateOf { navBarOccupiedHeight * navBarVisibilityProgress }
+        }
+        val miniPlayerBottomMargin by remember(systemNavBarInset, visibleNavBarOccupiedHeight) {
+            derivedStateOf {
+                if (visibleNavBarOccupiedHeight > systemNavBarInset) {
+                    visibleNavBarOccupiedHeight
+                } else {
+                    systemNavBarInset
+                }
+            }
+        }
+        val shouldRenderNavigationBar by remember(shouldHideNavigationBar, navBarVisibilityProgress) {
+            derivedStateOf {
+                !shouldHideNavigationBar || navBarVisibilityProgress > 0.01f
+            }
+        }
+        val isNavBarEffectivelyHidden by remember(shouldHideNavigationBar, navBarVisibilityProgress) {
+            derivedStateOf {
+                shouldHideNavigationBar && navBarVisibilityProgress <= 0.01f
+            }
+        }
 
         val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
         val scope = rememberCoroutineScope()
@@ -691,35 +734,7 @@ class MainActivity : ComponentActivity() {
                 Scaffold(
                 modifier = Modifier.fillMaxSize(),
                 bottomBar = {
-                    AnimatedVisibility(
-                        visible = !shouldHideNavigationBar,
-                        enter = slideInVertically(
-                            animationSpec = tween(
-                                durationMillis = 220,
-                                easing = LinearOutSlowInEasing
-                            ),
-                            initialOffsetY = { fullHeight -> fullHeight }
-                        ) + expandVertically(
-                            animationSpec = tween(
-                                durationMillis = 220,
-                                easing = LinearOutSlowInEasing
-                            ),
-                            expandFrom = Alignment.Bottom
-                        ),
-                        exit = slideOutVertically(
-                            animationSpec = tween(
-                                durationMillis = 180,
-                                easing = LinearOutSlowInEasing
-                            ),
-                            targetOffsetY = { fullHeight -> fullHeight }
-                        ) + shrinkVertically(
-                            animationSpec = tween(
-                                durationMillis = 180,
-                                easing = LinearOutSlowInEasing
-                            ),
-                            shrinkTowards = Alignment.Bottom
-                        )
-                    ) {
+                    if (shouldRenderNavigationBar) {
                         val playerContentExpansionFraction = playerViewModel.playerContentExpansionFraction.value
                         val currentSongId by remember {
                             playerViewModel.stablePlayerState
@@ -783,13 +798,6 @@ class MainActivity : ComponentActivity() {
                             )
                         }
 
-                        val animatedBottomBarPadding by animateDpAsState(
-                            targetValue = if (navBarStyle == NavBarStyle.FULL_WIDTH) 0.dp else systemNavBarInset,
-                            animationSpec = tween(400),
-                            label = "BottomBarPadding"
-                        )
-                        val bottomBarPadding = animatedBottomBarPadding
-
                         var componentHeightPx by remember { mutableStateOf(0) }
                         val density = LocalDensity.current
                         val shadowOverflowPx = remember(navBarElevation, density) {
@@ -812,26 +820,24 @@ class MainActivity : ComponentActivity() {
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(bottom = bottomBarPadding)
-                                .onSizeChanged { componentHeightPx = it.height }
-                                .graphicsLayer {
-                                    translationY = animatedTranslationY
-                                    alpha = 1f
-                                }
+                                .height(visibleNavBarOccupiedHeight)
+                                .clipToBounds()
                         ) {
-                            val navHeight: Dp = if (navBarStyle == NavBarStyle.DEFAULT) {
-                                NavBarContentHeight
-                            } else {
-                                NavBarContentHeightFullWidth + systemNavBarInset
-                            }
                             val onSearchIconDoubleTap = remember(playerViewModel) {
                                 { playerViewModel.onSearchNavIconDoubleTapped() }
                             }
 
                             Surface(
                                 modifier = Modifier
+                                    .align(Alignment.BottomCenter)
                                     .fillMaxWidth()
-                                    .height(navHeight)
+                                    .padding(bottom = bottomBarPadding)
+                                    .onSizeChanged { componentHeightPx = it.height }
+                                    .graphicsLayer {
+                                        translationY = animatedTranslationY
+                                        alpha = 1f
+                                    }
+                                    .height(navBarHeight)
                                     .padding(horizontal = horizontalPadding),
                                 color = NavigationBarDefaults.containerColor,
                                 shape = actualShape,
@@ -871,7 +877,7 @@ class MainActivity : ComponentActivity() {
                         val miniPlayerH = with(density) { MiniPlayerHeight.toPx() }
                         val totalSheetHeightWhenContentCollapsedPx = if (showPlayerContentInitially && !shouldHideMiniPlayer) miniPlayerH else 0f
 
-                        val bottomMargin = innerPadding.calculateBottomPadding()
+                        val bottomMargin = miniPlayerBottomMargin
 
                         val spacerPx = with(density) { MiniPlayerBottomSpacer.toPx() }
                         val sheetCollapsedTargetY = screenHeightPx - totalSheetHeightWhenContentCollapsedPx - with(density){ bottomMargin.toPx() } - spacerPx
@@ -893,7 +899,7 @@ class MainActivity : ComponentActivity() {
                                 hideMiniPlayer = shouldHideMiniPlayer,
                                 containerHeight = containerHeight,
                                 navController = navController,
-                                isNavBarHidden = shouldHideNavigationBar
+                                isNavBarHidden = isNavBarEffectivelyHidden
                             )
                         } else {
                             UnifiedPlayerSheet(
@@ -903,7 +909,7 @@ class MainActivity : ComponentActivity() {
                                 hideMiniPlayer = shouldHideMiniPlayer,
                                 containerHeight = containerHeight,
                                 navController = navController,
-                                isNavBarHidden = shouldHideNavigationBar
+                                isNavBarHidden = isNavBarEffectivelyHidden
                             )
                         }
 

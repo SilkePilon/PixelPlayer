@@ -61,8 +61,10 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.runtime.snapshotFlow
 import com.theveloper.pixelplay.ui.theme.LocalPixelPlayDarkTheme
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -296,8 +298,12 @@ fun UnifiedPlayerSheet(
         )
     }
 
-    LaunchedEffect(sheetCollapsedTargetY) {
-        sheetMotionController.syncToExpansion(sheetCollapsedTargetY)
+    val sheetCollapsedTargetYState = rememberUpdatedState(sheetCollapsedTargetY)
+    LaunchedEffect(sheetMotionController) {
+        snapshotFlow { sheetCollapsedTargetYState.value }
+            .collect { collapsedTargetY ->
+                sheetMotionController.syncToExpansion(collapsedTargetY)
+            }
     }
 
     var previousSheetState by remember { mutableStateOf(currentSheetContentState) }
