@@ -155,6 +155,7 @@
 
 # Ktor & Netty Rules (Crucial for StreamProxy)
 -keep class org.slf4j.** { *; }
+-dontwarn org.slf4j.impl.**
 
 # Ktor Specific
 -dontwarn io.ktor.**
