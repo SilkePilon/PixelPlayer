@@ -85,12 +85,23 @@ class AiPlaylistGenerator @Inject constructor(
             val songScores = songSample.associate { it.id to dailyMixManager.getScore(it.id) }
             val availableSongsJson = songSample.joinToString(separator = ",\n") { song ->
                 val score = songScores[song.id] ?: 0.0
+                val source = when {
+                    song.jellyfinId != null -> "jellyfin"
+                    song.navidromeId != null -> "navidrome"
+                    song.telegramFileId != null -> "telegram"
+                    song.neteaseId != null -> "netease"
+                    song.gdriveFileId != null -> "gdrive"
+                    song.qqMusicMid != null -> "qqmusic"
+                    else -> "local"
+                }
                 """
                 {
                     "id": "${song.id}",
                     "title": "${song.title.replace("\"", "'")}",
                     "artist": "${song.displayArtist.replace("\"", "'")}",
+                    "album": "${song.album.replace("\"", "'")}",
                     "genre": "${song.genre?.replace("\"", "'") ?: "unknown"}",
+                    "source": "$source",
                     "relevance_score": $score
                 }
                 """.trimIndent()
@@ -109,7 +120,7 @@ class AiPlaylistGenerator @Inject constructor(
 
             Instructions:
             1. Analyze the user's prompt to understand the desired mood, genre, or theme. This is the MOST IMPORTANT factor.
-            2. Select songs from the provided list that best match the user's request.
+            2. Select songs from the provided list that best match the user's request. Songs come from multiple sources (local files, cloud providers like Jellyfin, Navidrome, Telegram, etc.) — treat them all equally.
             3. The `relevance_score` is a secondary factor. Use it to break ties or to choose between songs that equally match the prompt. Do NOT prioritize it over the prompt match.
             4. The final playlist should have a number of songs between `min_length` and `max_length`. It does not have to be the maximum.
             5. Your response MUST be ONLY a valid JSON array of song IDs. Do not include any other text, explanations, or markdown formatting.

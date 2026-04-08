@@ -89,9 +89,11 @@ class GeminiAiClient(private val apiKey: String) : AiClient {
     private fun getDefaultModels(): List<String> {
         return listOf(
             "gemini-2.5-flash",
+            "gemini-2.5-flash-lite",
             "gemini-2.5-pro",
-            "gemini-1.5-flash",
-            "gemini-1.5-pro"
+            "gemini-3-flash-preview",
+            "gemini-3.1-pro-preview",
+            "gemini-3.1-flash-lite-preview"
         )
     }
 }

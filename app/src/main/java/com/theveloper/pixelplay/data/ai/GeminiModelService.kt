@@ -113,6 +113,11 @@ class GeminiModelService @Inject constructor() {
         // Fallback models if API call fails
         return listOf(
             GeminiModel("gemini-2.5-flash", "Gemini 2.5 Flash"),
+            GeminiModel("gemini-2.5-flash-lite", "Gemini 2.5 Flash Lite"),
+            GeminiModel("gemini-2.5-pro", "Gemini 2.5 Pro"),
+            GeminiModel("gemini-3-flash-preview", "Gemini 3 Flash Preview"),
+            GeminiModel("gemini-3.1-pro-preview", "Gemini 3.1 Pro Preview"),
+            GeminiModel("gemini-3.1-flash-lite-preview", "Gemini 3.1 Flash Lite Preview"),
         )
     }
 }
