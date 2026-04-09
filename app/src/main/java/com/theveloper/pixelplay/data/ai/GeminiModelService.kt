@@ -1,5 +1,6 @@
 package com.theveloper.pixelplay.data.ai
 
+
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import timber.log.Timber
@@ -12,7 +13,11 @@ data class GeminiModel(
 )
 
 @Singleton
-class GeminiModelService @Inject constructor() {
+class GeminiModelService @Inject constructor(
+    private val orchestrator: AiOrchestrator,
+    private val digestGenerator: UserProfileDigestGenerator,
+    private val workerManager: AiWorkerManager
+) {
 
     /**
      * Fetches available Gemini models using the provided API key.
@@ -97,6 +102,46 @@ class GeminiModelService @Inject constructor() {
         } catch (e: Exception) {
             Timber.e(e, "Error parsing models response")
             return getDefaultModels()
+        }
+    }
+
+    /**
+     * Estimates the token count for a piece of text.
+     * Uses a conservative 4 chars per token rule for non-Gemini providers,
+     * but we recommend using the specific countTokens method on AiClient for accuracy.
+     */
+    fun estimateTokens(text: String): Int {
+        return (text.length / 4).coerceAtLeast(1)
+    }
+
+    /**
+     * High-level method to perform an AI operation.
+     * Starts a background worker if [runInBackground] is true, 
+     * otherwise executes immediately and returns the result.
+     */
+    suspend fun performAiTask(
+        prompt: String,
+        type: AiSystemPromptType,
+        runInBackground: Boolean = false,
+        temperature: Float = 0.7f
+    ): String? {
+        if (runInBackground) {
+            workerManager.enqueueAiTask(prompt, type, temperature)
+            return null
+        } else {
+            val allSongs = musicDao.getAllSongsList()
+            val context = if (type == AiSystemPromptType.PLAYLIST || 
+                            type == AiSystemPromptType.TAGGING || 
+                            type == AiSystemPromptType.PERSONA) {
+                digestGenerator.generateDigest(allSongs)
+            } else ""
+
+            return orchestrator.generateContent(
+                prompt = prompt,
+                type = type,
+                temperature = temperature,
+                context = context
+            )
         }
     }
 

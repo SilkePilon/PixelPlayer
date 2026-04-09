@@ -115,7 +115,11 @@ fun DailyMixScreen(
 
     val showAiSheet by playerViewModel.showAiPlaylistSheet.collectAsStateWithLifecycle()
     val isGeneratingAiPlaylist by playerViewModel.isGeneratingAiPlaylist.collectAsStateWithLifecycle()
+    val aiStatus by playerViewModel.aiStatus.collectAsStateWithLifecycle()
     val aiError by playerViewModel.aiError.collectAsStateWithLifecycle()
+    val aiSuccess by playerViewModel.aiSuccess.collectAsStateWithLifecycle()
+    val isGeneratingAiMetadata by playerViewModel.isGeneratingAiMetadata.collectAsStateWithLifecycle()
+    val aiMetadataSuccess by playerViewModel.aiMetadataSuccess.collectAsStateWithLifecycle()
     val lazyListState = rememberLazyListState()
 
     var showSongInfoSheet by remember { mutableStateOf(false) }
@@ -133,13 +137,18 @@ fun DailyMixScreen(
     }
 
     if (showAiSheet) {
+        // AI Integration: Premium Material 3 Expressive sheet for interactive playlist curation
         AiPlaylistSheet(
             onDismiss = { playerViewModel.dismissAiPlaylistSheet() },
             onGenerateClick = { prompt, minLength, maxLength ->
+                // Optimize: Trigger background AI generation and track real-time status
                 playerViewModel.generateAiPlaylist(prompt, minLength, maxLength, saveAsPlaylist = false)
             },
             isGenerating = isGeneratingAiPlaylist,
-            error = aiError
+            isSuccess = aiSuccess,
+            status = aiStatus,
+            error = aiError,
+            onRetry = { playerViewModel.retryLastPlaylistGeneration() }
         )
     }
 
@@ -217,7 +226,11 @@ fun DailyMixScreen(
             generateAiMetadata = { fields ->
                 playerViewModel.generateAiMetadata(song, fields)
             },
-            removeFromListTrigger = removeFromListTrigger
+            removeFromListTrigger = removeFromListTrigger,
+            isGeneratingMetadata = isGeneratingAiMetadata,
+            aiMetadataSuccess = aiMetadataSuccess,
+            aiError = aiError,
+            onRetryMetadata = { playerViewModel.retryLastMetadataGeneration() }
         )
 
         if (showPlaylistBottomSheet) {

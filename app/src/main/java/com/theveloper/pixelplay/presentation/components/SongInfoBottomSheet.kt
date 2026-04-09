@@ -113,6 +113,10 @@ fun SongInfoBottomSheet(
     ) -> Unit,
     generateAiMetadata: suspend (List<String>) -> Result<SongMetadata>,
     removeFromListTrigger: () -> Unit,
+    isGeneratingMetadata: Boolean = false,
+    aiMetadataSuccess: Boolean = false,
+    aiError: String? = null,
+    onRetryMetadata: () -> Unit = {},
     songInfoViewModel: SongInfoBottomSheetViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
@@ -803,7 +807,11 @@ fun SongInfoBottomSheet(
             )
             showEditSheet = false
         },
-        generateAiMetadata = generateAiMetadata
+        generateAiMetadata = generateAiMetadata,
+        isGeneratingAiMetadata = isGeneratingMetadata,
+        aiMetadataSuccess = aiMetadataSuccess,
+        aiError = aiError,
+        onRetryMetadata = onRetryMetadata
     )
 }
 

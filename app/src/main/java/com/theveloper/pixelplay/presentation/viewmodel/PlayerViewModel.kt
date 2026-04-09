@@ -148,6 +148,7 @@ private data class SortOptionsSnapshot(
 private data class AiUiSnapshot(
     val showAiPlaylistSheet: Boolean,
     val isGeneratingAiPlaylist: Boolean,
+    val aiStatus: String?,
     val aiError: String?,
     val isGeneratingAiMetadata: Boolean,
 )
@@ -358,15 +359,16 @@ class PlayerViewModel @Inject constructor(
 
     val playerContentExpansionFraction = Animatable(0f)
 
-    // AI Playlist Generation State
-    private val _showAiPlaylistSheet = MutableStateFlow(false)
-    val showAiPlaylistSheet: StateFlow<Boolean> = _showAiPlaylistSheet.asStateFlow()
+    // AI Ecosystem: States delegated to AiStateHolder for centralized management
+    val showAiPlaylistSheet: StateFlow<Boolean> = aiStateHolder.showAiPlaylistSheet
+    val isGeneratingAiPlaylist: StateFlow<Boolean> = aiStateHolder.isGeneratingAiPlaylist
+    val aiSuccess: StateFlow<Boolean> = aiStateHolder.aiSuccess
+    val aiStatus: StateFlow<String?> = aiStateHolder.aiStatus
+    val aiError: StateFlow<String?> = aiStateHolder.aiError
 
-    private val _isGeneratingAiPlaylist = MutableStateFlow(false)
-    val isGeneratingAiPlaylist: StateFlow<Boolean> = _isGeneratingAiPlaylist.asStateFlow()
-
-    private val _aiError = MutableStateFlow<String?>(null)
-    val aiError: StateFlow<String?> = _aiError.asStateFlow()
+    // AI Metadata Generation States
+    val isGeneratingAiMetadata: StateFlow<Boolean> = aiStateHolder.isGeneratingMetadata
+    val aiMetadataSuccess: StateFlow<Boolean> = aiStateHolder.aiMetadataSuccess
 
     private val _selectedSongForInfo = MutableStateFlow<Song?>(null)
     val selectedSongForInfo: StateFlow<Song?> = _selectedSongForInfo.asStateFlow()
@@ -416,11 +418,23 @@ class PlayerViewModel @Inject constructor(
     val hasActiveAiProviderApiKey: StateFlow<Boolean> = combine(
         aiPreferencesRepository.aiProvider,
         aiPreferencesRepository.geminiApiKey,
-        aiPreferencesRepository.deepseekApiKey
-    ) { provider, geminiKey, deepseekKey ->
+        aiPreferencesRepository.deepseekApiKey,
+        aiPreferencesRepository.groqApiKey,
+        aiPreferencesRepository.mistralApiKey,
+        aiPreferencesRepository.nvidiaApiKey,
+        aiPreferencesRepository.kimiApiKey,
+        aiPreferencesRepository.glmApiKey,
+        aiPreferencesRepository.openaiApiKey
+    ) { provider, gemini, deepseek, groq, mistral, nvidia, kimi, glm, openai ->
         when (provider) {
-            "DEEPSEEK" -> deepseekKey.isNotBlank()
-            else -> geminiKey.isNotBlank()
+            "DEEPSEEK" -> deepseek.isNotBlank()
+            "GROQ" -> groq.isNotBlank()
+            "MISTRAL" -> mistral.isNotBlank()
+            "NVIDIA" -> nvidia.isNotBlank()
+            "KIMI" -> kimi.isNotBlank()
+            "GLM" -> glm.isNotBlank()
+            "OPENAI" -> openai.isNotBlank()
+            else -> gemini.isNotBlank()
         }
     }.distinctUntilChanged()
         .stateIn(
@@ -1687,18 +1701,21 @@ class PlayerViewModel @Inject constructor(
             combine(
                 aiStateHolder.showAiPlaylistSheet,
                 aiStateHolder.isGeneratingAiPlaylist,
+                aiStateHolder.aiStatus,
                 aiStateHolder.aiError,
                 aiStateHolder.isGeneratingMetadata,
-            ) { show, generating, error, generatingMetadata ->
+            ) { show, generating, status, error, generatingMetadata ->
                 AiUiSnapshot(
                     showAiPlaylistSheet = show,
                     isGeneratingAiPlaylist = generating,
+                    aiStatus = status,
                     aiError = error,
                     isGeneratingAiMetadata = generatingMetadata
                 )
             }.collect { snapshot ->
                 _showAiPlaylistSheet.value = snapshot.showAiPlaylistSheet
                 _isGeneratingAiPlaylist.value = snapshot.isGeneratingAiPlaylist
+                _aiStatus.value = snapshot.aiStatus
                 _aiError.value = snapshot.aiError
                 _playerUiState.update {
                     it.copy(isGeneratingAiMetadata = snapshot.isGeneratingAiMetadata)
@@ -3771,6 +3788,14 @@ class PlayerViewModel @Inject constructor(
 
     fun regenerateDailyMixWithPrompt(prompt: String) {
         aiStateHolder.regenerateDailyMixWithPrompt(prompt)
+    }
+
+    fun retryLastPlaylistGeneration() {
+        aiStateHolder.retryLastPlaylistGeneration()
+    }
+
+    fun retryLastMetadataGeneration() {
+        aiStateHolder.retryLastMetadataGeneration()
     }
 
     fun clearQueueExceptCurrent() {

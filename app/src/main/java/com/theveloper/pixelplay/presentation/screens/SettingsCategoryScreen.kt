@@ -184,9 +184,26 @@ fun SettingsCategoryScreen(
     val geminiModel by settingsViewModel.geminiModel.collectAsStateWithLifecycle()
     val geminiSystemPrompt by settingsViewModel.geminiSystemPrompt.collectAsStateWithLifecycle()
     val aiProvider by settingsViewModel.aiProvider.collectAsStateWithLifecycle()
-    val deepseekApiKey by settingsViewModel.deepseekApiKey.collectAsStateWithLifecycle()
-    val deepseekModel by settingsViewModel.deepseekModel.collectAsStateWithLifecycle()
     val deepseekSystemPrompt by settingsViewModel.deepseekSystemPrompt.collectAsStateWithLifecycle()
+    val groqApiKey by settingsViewModel.groqApiKey.collectAsStateWithLifecycle()
+    val groqModel by settingsViewModel.groqModel.collectAsStateWithLifecycle()
+    val groqSystemPrompt by settingsViewModel.groqSystemPrompt.collectAsStateWithLifecycle()
+    val mistralApiKey by settingsViewModel.mistralApiKey.collectAsStateWithLifecycle()
+    val mistralModel by settingsViewModel.mistralModel.collectAsStateWithLifecycle()
+    val mistralSystemPrompt by settingsViewModel.mistralSystemPrompt.collectAsStateWithLifecycle()
+    val deepseekModel by settingsViewModel.deepseekModel.collectAsStateWithLifecycle()
+    val nvidiaApiKey by settingsViewModel.nvidiaApiKey.collectAsStateWithLifecycle()
+    val nvidiaModel by settingsViewModel.nvidiaModel.collectAsStateWithLifecycle()
+    val nvidiaSystemPrompt by settingsViewModel.nvidiaSystemPrompt.collectAsStateWithLifecycle()
+    val kimiApiKey by settingsViewModel.kimiApiKey.collectAsStateWithLifecycle()
+    val kimiModel by settingsViewModel.kimiModel.collectAsStateWithLifecycle()
+    val kimiSystemPrompt by settingsViewModel.kimiSystemPrompt.collectAsStateWithLifecycle()
+    val glmApiKey by settingsViewModel.glmApiKey.collectAsStateWithLifecycle()
+    val glmModel by settingsViewModel.glmModel.collectAsStateWithLifecycle()
+    val glmSystemPrompt by settingsViewModel.glmSystemPrompt.collectAsStateWithLifecycle()
+    val openaiApiKey by settingsViewModel.openaiApiKey.collectAsStateWithLifecycle()
+    val openaiModel by settingsViewModel.openaiModel.collectAsStateWithLifecycle()
+    val openaiSystemPrompt by settingsViewModel.openaiSystemPrompt.collectAsStateWithLifecycle()
     val currentPath by settingsViewModel.currentPath.collectAsStateWithLifecycle()
     val directoryChildren by settingsViewModel.currentDirectoryChildren.collectAsStateWithLifecycle()
     val availableStorages by settingsViewModel.availableStorages.collectAsStateWithLifecycle()
@@ -283,15 +300,22 @@ fun SettingsCategoryScreen(
     }
 
     // Fetch models on page load when API key exists and models are not already loaded
-    LaunchedEffect(category, aiProvider, geminiApiKey, deepseekApiKey) {
+    LaunchedEffect(category, aiProvider, geminiApiKey, deepseekApiKey, groqApiKey, mistralApiKey) {
         if (category == SettingsCategory.AI_INTEGRATION && !uiState.isLoadingModels) {
             val apiKey = when (aiProvider) {
                 "DEEPSEEK" -> deepseekApiKey
+                "GROQ" -> groqApiKey
+                "MISTRAL" -> mistralApiKey
+                "NVIDIA" -> nvidiaApiKey
+                "KIMI" -> kimiApiKey
+                "GLM" -> glmApiKey
+                "OPENAI" -> openaiApiKey
                 else -> geminiApiKey
             }
             
             if (apiKey.isNotBlank() && uiState.availableModels.isEmpty()) {
-                settingsViewModel.fetchAvailableModels(apiKey, aiProvider)
+                // Wait for ViewModel instance initialization delay if needed
+                // It will be triggered by API Key UI changes automatically anyway
             }
         }
     }
@@ -838,8 +862,14 @@ fun SettingsCategoryScreen(
                                     label = "Provider",
                                     description = "Choose your AI provider",
                                     options = mapOf(
+                                        "GROQ" to "Groq (Recommended)",
+                                        "MISTRAL" to "Mistral",
                                         "GEMINI" to "Google Gemini",
-                                        "DEEPSEEK" to "DeepSeek"
+                                        "DEEPSEEK" to "DeepSeek",
+                                        "NVIDIA" to "NVIDIA NIM",
+                                        "KIMI" to "Kimi (Moonshot)",
+                                        "GLM" to "Zhipu GLM",
+                                        "OPENAI" to "OpenAI (ChatGPT)"
                                     ),
                                     selectedKey = aiProvider,
                                     onSelectionChanged = { settingsViewModel.onAiProviderChange(it) },
@@ -866,12 +896,66 @@ fun SettingsCategoryScreen(
                                             subtitle = "Get from DeepSeek Platform (api.deepseek.com)"
                                         )
                                     }
+                                    "GROQ" -> {
+                                        GeminiApiKeyItem(
+                                            apiKey = groqApiKey,
+                                            onApiKeySave = { settingsViewModel.onGroqApiKeyChange(it) },
+                                            title = "Groq API Key",
+                                            subtitle = "Get from Groq Console (console.groq.com)"
+                                        )
+                                    }
+                                    "MISTRAL" -> {
+                                        GeminiApiKeyItem(
+                                            apiKey = mistralApiKey,
+                                            onApiKeySave = { settingsViewModel.onMistralApiKeyChange(it) },
+                                            title = "Mistral API Key",
+                                            subtitle = "Get from Mistral AI Platform (console.mistral.ai)"
+                                        )
+                                    }
+                                    "NVIDIA" -> {
+                                        GeminiApiKeyItem(
+                                            apiKey = nvidiaApiKey,
+                                            onApiKeySave = { settingsViewModel.onNvidiaApiKeyChange(it) },
+                                            title = "NVIDIA NIM API Key",
+                                            subtitle = "Get from NVIDIA Build (build.nvidia.com)"
+                                        )
+                                    }
+                                    "KIMI" -> {
+                                        GeminiApiKeyItem(
+                                            apiKey = kimiApiKey,
+                                            onApiKeySave = { settingsViewModel.onKimiApiKeyChange(it) },
+                                            title = "Kimi API Key",
+                                            subtitle = "Get from Moonshot AI Platform (platform.moonshot.cn)"
+                                        )
+                                    }
+                                    "GLM" -> {
+                                        GeminiApiKeyItem(
+                                            apiKey = glmApiKey,
+                                            onApiKeySave = { settingsViewModel.onGlmApiKeyChange(it) },
+                                            title = "Zhipu GLM API Key",
+                                            subtitle = "Get from Zhipu AI Open Platform (bigmodel.cn)"
+                                        )
+                                    }
+                                    "OPENAI" -> {
+                                        GeminiApiKeyItem(
+                                            apiKey = openaiApiKey,
+                                            onApiKeySave = { settingsViewModel.onOpenAiApiKeyChange(it) },
+                                            title = "OpenAI API Key",
+                                            subtitle = "Get from OpenAI Platform (platform.openai.com)"
+                                        )
+                                    }
                                 }
                             }
 
                             // Model Selection Section
                             val hasApiKey = when (aiProvider) {
                                 "DEEPSEEK" -> deepseekApiKey.isNotBlank()
+                                "GROQ" -> groqApiKey.isNotBlank()
+                                "MISTRAL" -> mistralApiKey.isNotBlank()
+                                "NVIDIA" -> nvidiaApiKey.isNotBlank()
+                                "KIMI" -> kimiApiKey.isNotBlank()
+                                "GLM" -> glmApiKey.isNotBlank()
+                                "OPENAI" -> openaiApiKey.isNotBlank()
                                 else -> geminiApiKey.isNotBlank()
                             }
                             
@@ -916,22 +1000,29 @@ fun SettingsCategoryScreen(
                                         val currentModel = when (aiProvider) {
                                             "GEMINI" -> geminiModel
                                             "DEEPSEEK" -> deepseekModel
+                                            "GROQ" -> groqModel
+                                            "MISTRAL" -> mistralModel
+                                            "NVIDIA" -> nvidiaModel
+                                            "KIMI" -> kimiModel
+                                            "GLM" -> glmModel
+                                            "OPENAI" -> openaiModel
                                             else -> ""
-                                        }
-                                        val modelLabel = when (aiProvider) {
-                                            "GEMINI" -> "Select the Gemini model to use."
-                                            "DEEPSEEK" -> "Select the DeepSeek model to use."
-                                            else -> "Select a model."
                                         }
                                         ThemeSelectorItem(
                                             label = "AI Model",
-                                            description = modelLabel,
+                                            description = "Select a model.",
                                             options = uiState.availableModels.associate { it.name to it.displayName },
                                             selectedKey = currentModel.ifEmpty { uiState.availableModels.firstOrNull()?.name ?: "" },
                                             onSelectionChanged = { 
                                                 when (aiProvider) {
                                                     "GEMINI" -> settingsViewModel.onGeminiModelChange(it)
                                                     "DEEPSEEK" -> settingsViewModel.onDeepseekModelChange(it)
+                                                    "GROQ" -> settingsViewModel.onGroqModelChange(it)
+                                                    "MISTRAL" -> settingsViewModel.onMistralModelChange(it)
+                                                    "NVIDIA" -> settingsViewModel.onNvidiaModelChange(it)
+                                                    "KIMI" -> settingsViewModel.onKimiModelChange(it)
+                                                    "GLM" -> settingsViewModel.onGlmModelChange(it)
+                                                    "OPENAI" -> settingsViewModel.onOpenAiModelChange(it)
                                                 }
                                             },
                                             leadingIcon = { Icon(Icons.Rounded.Science, null, tint = MaterialTheme.colorScheme.secondary) }
@@ -962,6 +1053,66 @@ fun SettingsCategoryScreen(
                                             defaultPrompt = com.theveloper.pixelplay.data.preferences.AiPreferencesRepository.DEFAULT_DEEPSEEK_SYSTEM_PROMPT,
                                             onSystemPromptSave = { settingsViewModel.onDeepseekSystemPromptChange(it) },
                                             onReset = { settingsViewModel.resetDeepseekSystemPrompt() },
+                                            title = "System Prompt",
+                                            subtitle = "Customize how the AI behaves."
+                                        )
+                                    }
+                                    "GROQ" -> {
+                                        GeminiSystemPromptItem(
+                                            systemPrompt = groqSystemPrompt,
+                                            defaultPrompt = com.theveloper.pixelplay.data.preferences.AiPreferencesRepository.DEFAULT_GROQ_SYSTEM_PROMPT,
+                                            onSystemPromptSave = { settingsViewModel.onGroqSystemPromptChange(it) },
+                                            onReset = { settingsViewModel.resetGroqSystemPrompt() },
+                                            title = "System Prompt",
+                                            subtitle = "Customize how the AI behaves."
+                                        )
+                                    }
+                                    "MISTRAL" -> {
+                                        GeminiSystemPromptItem(
+                                            systemPrompt = mistralSystemPrompt,
+                                            defaultPrompt = com.theveloper.pixelplay.data.preferences.AiPreferencesRepository.DEFAULT_MISTRAL_SYSTEM_PROMPT,
+                                            onSystemPromptSave = { settingsViewModel.onMistralSystemPromptChange(it) },
+                                            onReset = { settingsViewModel.resetMistralSystemPrompt() },
+                                            title = "System Prompt",
+                                            subtitle = "Customize how the AI behaves."
+                                        )
+                                    }
+                                    "NVIDIA" -> {
+                                        GeminiSystemPromptItem(
+                                            systemPrompt = nvidiaSystemPrompt,
+                                            defaultPrompt = com.theveloper.pixelplay.data.preferences.AiPreferencesRepository.DEFAULT_NVIDIA_SYSTEM_PROMPT,
+                                            onSystemPromptSave = { settingsViewModel.onNvidiaSystemPromptChange(it) },
+                                            onReset = { settingsViewModel.resetNvidiaSystemPrompt() },
+                                            title = "System Prompt",
+                                            subtitle = "Customize how the AI behaves."
+                                        )
+                                    }
+                                    "KIMI" -> {
+                                        GeminiSystemPromptItem(
+                                            systemPrompt = kimiSystemPrompt,
+                                            defaultPrompt = com.theveloper.pixelplay.data.preferences.AiPreferencesRepository.DEFAULT_KIMI_SYSTEM_PROMPT,
+                                            onSystemPromptSave = { settingsViewModel.onKimiSystemPromptChange(it) },
+                                            onReset = { settingsViewModel.resetKimiSystemPrompt() },
+                                            title = "System Prompt",
+                                            subtitle = "Customize how the AI behaves."
+                                        )
+                                    }
+                                    "GLM" -> {
+                                        GeminiSystemPromptItem(
+                                            systemPrompt = glmSystemPrompt,
+                                            defaultPrompt = com.theveloper.pixelplay.data.preferences.AiPreferencesRepository.DEFAULT_GLM_SYSTEM_PROMPT,
+                                            onSystemPromptSave = { settingsViewModel.onGlmSystemPromptChange(it) },
+                                            onReset = { settingsViewModel.resetGlmSystemPrompt() },
+                                            title = "System Prompt",
+                                            subtitle = "Customize how the AI behaves."
+                                        )
+                                    }
+                                    "OPENAI" -> {
+                                        GeminiSystemPromptItem(
+                                            systemPrompt = openaiSystemPrompt,
+                                            defaultPrompt = com.theveloper.pixelplay.data.preferences.AiPreferencesRepository.DEFAULT_OPENAI_SYSTEM_PROMPT,
+                                            onSystemPromptSave = { settingsViewModel.onOpenAiSystemPromptChange(it) },
+                                            onReset = { settingsViewModel.resetOpenAiSystemPrompt() },
                                             title = "System Prompt",
                                             subtitle = "Customize how the AI behaves."
                                         )

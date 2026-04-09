@@ -111,7 +111,11 @@ fun EditSongSheet(
         replayGainAlbumGainDb: String,
         coverArtUpdate: CoverArtUpdate?
     ) -> Unit,
-    generateAiMetadata: suspend (List<String>) -> Result<com.theveloper.pixelplay.data.ai.SongMetadata>
+    generateAiMetadata: suspend (List<String>) -> Result<com.theveloper.pixelplay.data.ai.SongMetadata>,
+    isGeneratingAiMetadata: Boolean = false,
+    aiMetadataSuccess: Boolean = false,
+    aiError: String? = null,
+    onRetryMetadata: () -> Unit = {}
 ) {
     val transitionState = remember { MutableTransitionState(false) }
     transitionState.targetState = visible
@@ -133,7 +137,11 @@ fun EditSongSheet(
                     song = song,
                     onDismiss = onDismiss,
                     onSave = onSave,
-                    generateAiMetadata = generateAiMetadata
+                    generateAiMetadata = generateAiMetadata,
+                    isGeneratingAiMetadata = isGeneratingAiMetadata,
+                    aiMetadataSuccess = aiMetadataSuccess,
+                    aiError = aiError,
+                    onRetryMetadata = onRetryMetadata
                 )
             }
         }
@@ -157,7 +165,11 @@ private fun EditSongContent(
         replayGainAlbumGainDb: String,
         coverArtUpdate: CoverArtUpdate?
     ) -> Unit,
-    generateAiMetadata: suspend (List<String>) -> Result<com.theveloper.pixelplay.data.ai.SongMetadata>
+    generateAiMetadata: suspend (List<String>) -> Result<com.theveloper.pixelplay.data.ai.SongMetadata>,
+    isGeneratingAiMetadata: Boolean,
+    aiMetadataSuccess: Boolean,
+    aiError: String?,
+    onRetryMetadata: () -> Unit
 ) {
     var title by remember { mutableStateOf(song.title) }
     var artist by remember { mutableStateOf(song.displayArtist) }
@@ -175,8 +187,8 @@ private fun EditSongContent(
     var pendingCoverArtUri by remember { mutableStateOf<Uri?>(null) }
 
     var showInfoDialog by remember { mutableStateOf(false) }
-    var showAiDialog by remember { mutableStateOf(false) }
-    var isGenerating by remember { mutableStateOf(false) }
+    var showAiSheet by remember { mutableStateOf(false) }
+    var aiMetadata by remember { mutableStateOf<com.theveloper.pixelplay.data.ai.SongMetadata?>(null) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val pickCoverArtLauncher = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
@@ -226,41 +238,43 @@ private fun EditSongContent(
         }
     }
 
-    if (isGenerating) {
-        AlertDialog(
-            onDismissRequest = { },
-            title = { Text("Generating Metadata") },
-            text = {
-                Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxWidth()) {
-                    CircularProgressIndicator()
-                }
+    if (showAiSheet) {
+        // AI Integration: Use premium bottom sheet for metadata generation workflow
+        AiMetadataSheet(
+            onDismiss = { 
+                showAiSheet = false
+                aiMetadata = null
             },
-            confirmButton = {}
+            initialMetadata = aiMetadata,
+            isGenerating = isGeneratingAiMetadata,
+            isSuccess = aiMetadataSuccess,
+            error = aiError,
+            onApply = { metadata ->
+                // Apply generated metadata with fallbacks
+                title = metadata.title?.takeIf { it.isNotBlank() } ?: title
+                artist = metadata.artist?.takeIf { it.isNotBlank() } ?: artist
+                album = metadata.album?.takeIf { it.isNotBlank() } ?: album
+                genre = metadata.genre?.takeIf { it.isNotBlank() } ?: genre
+                showAiSheet = false
+                aiMetadata = null
+            },
+            onRetry = onRetryMetadata
         )
-    }
 
-    if (showAiDialog) {
-        AiMetadataDialog(
-            song = song,
-            onDismiss = { showAiDialog = false },
-            onGenerate = { fields ->
-                scope.launch {
-                    isGenerating = true
-                    val result = generateAiMetadata(fields)
-                    result.onSuccess { metadata ->
-                        Timber.d("AI metadata generated successfully: $metadata")
-                        title = metadata.title ?: title
-                        artist = metadata.artist ?: artist
-                        album = metadata.album ?: album
-                        genre = metadata.genre ?: genre
-                    }.onFailure { error ->
-                        Timber.e(error, "Failed to generate AI metadata")
-                    }
-                    isGenerating = false
+        // Trigger generation if not already done
+        LaunchedEffect(Unit) {
+            if (aiMetadata == null && !isGeneratingAiMetadata && !aiMetadataSuccess) {
+                generateAiMetadata(listOf("title", "artist", "album", "genre")).onSuccess { metadata ->
+                    aiMetadata = metadata
                 }
-                showAiDialog = false
             }
-        )
+        }
+                }.onFailure { error ->
+                    aiError = error.message
+                }
+                isGenerating = false
+            }
+        }
     }
 
     if (showCoverArtCropper && pendingCoverArtUri != null) {
@@ -356,7 +370,7 @@ private fun EditSongContent(
                                     )
                                 )
                         ) {
-                            IconButton(onClick = { showAiDialog = true }) {
+                            IconButton(onClick = { showAiSheet = true }) {
                                 Icon(
                                     modifier = Modifier
                                         .size(20.dp),
